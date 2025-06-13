@@ -31,4 +31,4 @@ routers.include_routers(app)
 @app.on_event("startup")
 async def startup_event() -> None:
     """Perform logger setup on service startup."""
-get_logger("app.endpoints.handlers")
+    get_logger("app.endpoints.handlers")
