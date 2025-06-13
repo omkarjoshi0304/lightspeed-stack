@@ -162,10 +162,9 @@ class FeedbackRequest(BaseModel):
     # Optional user feedback limited to 1–4096 characters to prevent abuse.
     user_feedback: Optional[str] = Field(
         default=None,
-        min_length=1,
         max_length=4096,
-        description="Maximum length of user feedback is 4096 characters long.",
-        examples=["How to Set Up Kubernetes?"],
+        description="Feedback on the LLM response.",
+        examples=["I'm not satisfied with the response because it is too vague."],
     )
 
     # provides examples for /docs endpoint

@@ -177,28 +177,14 @@ class TestFeedbackRequest:
                 user_feedback=None,
             )
 
-    def test_user_feedback_too_long(self) -> None:
-       """Test that feedback longer than 4096 characters raises an error."""
-    with pytest.raises(ValidationError) as exc_info:
-        FeedbackRequest(
-            conversation_id="123e4567-e89b-12d3-a456-426614174000",
-            user_question="What is OpenStack?",
-            llm_response="OpenStack is a cloud computing platform.",
-            user_feedback="x" * 4097,
-        )
-    assert "should have at most 4096 characters" in str(exc_info.value)
-
-
-    def test_user_feedback_too_short(self) -> None:
-        """Test that user_feedback shorter than 1 character raises ValidationError."""
-    with pytest.raises(ValidationError) as exc_info:
-        FeedbackRequest(
-            conversation_id="123e4567-e89b-12d3-a456-426614174000",
-            user_question="What is OpenStack?",
-            llm_response="OpenStack is a cloud computing platform.",
-            user_feedback="",  # Empty feedback
-        )
-    assert "should have at least 1 character" in str(exc_info.value)
-
-
-
+    def test_feedback_too_long(self) -> None:
+        """Test that user feedback is limited to 4096 characters."""
+        with pytest.raises(
+            ValidationError, match="should have at most 4096 characters"
+        ):
+            FeedbackRequest(
+                conversation_id="12345678-abcd-0000-0123-456789abcdef",
+                user_question="What is this?",
+                llm_response="Some response",
+                user_feedback="a" * 4097,
+            )
