@@ -17,6 +17,10 @@ def test_default_configuration() -> None:
         # try to read property
         cfg.llama_stack_configuration
 
+    with pytest.raises(Exception, match="logic error: configuration is not loaded"):
+        # try to read property
+        cfg.user_data_collection_configuration
+
 
 def test_configuration_is_singleton() -> None:
     cfg1 = AppConfig()
@@ -46,9 +50,31 @@ def test_init_from_dict() -> None:
     }
     cfg = AppConfig()
     cfg.init_from_dict(config_dict)
+
+    # check for all subsections
     assert cfg.configuration is not None
     assert cfg.llama_stack_configuration is not None
     assert cfg.service_configuration is not None
+    assert cfg.user_data_collection_configuration is not None
+
+    # check for configuration subsection
+    assert cfg.configuration.name == "foo"
+
+    # check for llama_stack_configuration subsection
+    assert cfg.llama_stack_configuration.api_key == "xyzzy"
+    assert cfg.llama_stack_configuration.url == "http://x.y.com:1234"
+    assert cfg.llama_stack_configuration.use_as_library_client is False
+
+    # check for service_configuration subsection
+    assert cfg.service_configuration.host == "localhost"
+    assert cfg.service_configuration.port == 8080
+    assert cfg.service_configuration.auth_enabled is False
+    assert cfg.service_configuration.workers == 1
+    assert cfg.service_configuration.color_log is True
+    assert cfg.service_configuration.access_log is True
+
+    # check for user data collection subsection
+    assert cfg.user_data_collection_configuration.feedback_disabled is True
 
 
 def test_load_proper_configuration(tmpdir) -> None:
@@ -78,3 +104,4 @@ user_data_collection:
     assert cfg.configuration is not None
     assert cfg.llama_stack_configuration is not None
     assert cfg.service_configuration is not None
+    assert cfg.user_data_collection_configuration is not None

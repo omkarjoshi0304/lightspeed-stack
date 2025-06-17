@@ -25,6 +25,9 @@ format: ## Format the code into unified format
 	pdm run black .
 	pdm run ruff check . --fix
 
+schema:	## Generate OpenAPI schema file
+	pdm run scripts/generate_openapi_schema.py docs/openapi.json
+
 requirements.txt:	pyproject.toml pdm.lock ## Generate requirements.txt file containing hashes for all non-devel packages
 	pdm export --prod --format requirements --output requirements.txt --no-extras --without evaluation
 

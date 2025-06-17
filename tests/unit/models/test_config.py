@@ -1,8 +1,10 @@
 """Unit tests for functions defined in src/models/config.py."""
 
+import json
 import pytest
 
 from models.config import (
+    Configuration,
     LLamaStackConfiguration,
     ServiceConfiguration,
     UserDataCollection,
@@ -90,6 +92,8 @@ def test_user_data_collection_collection_enabled() -> None:
     # correct configuration
     cfg = UserDataCollection(feedback_disabled=True, feedback_storage=None)
     assert cfg is not None
+    assert cfg.feedback_disabled is True
+    assert cfg.feedback_storage is None
 
 
 def test_user_data_collection_colection_disabled() -> None:
@@ -104,3 +108,28 @@ def test_user_data_collection_colection_disabled() -> None:
         match="feedback_storage is required when feedback is enabled",
     ):
         UserDataCollection(feedback_disabled=False, feedback_storage=None)
+
+
+def test_dump_configuration(tmp_path) -> None:
+    """Test the ability to dump configuration."""
+    cfg = Configuration(
+        name="test_name",
+        service=ServiceConfiguration(),
+        llama_stack=LLamaStackConfiguration(
+            use_as_library_client=True, library_client_config_path="foo"
+        ),
+        user_data_collection=UserDataCollection(
+            feedback_disabled=True, feedback_storage=None
+        ),
+    )
+    assert cfg is not None
+    dump_file = tmp_path / "test.json"
+    cfg.dump(dump_file)
+
+    with open(dump_file, "r", encoding="utf-8") as fin:
+        content = json.load(fin)
+        assert content is not None
+        assert "name" in content
+        assert "service" in content
+        assert "llama_stack" in content
+        assert "user_data_collection" in content

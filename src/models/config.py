@@ -81,3 +81,8 @@ class Configuration(BaseModel):
     service: ServiceConfiguration
     llama_stack: LLamaStackConfiguration
     user_data_collection: UserDataCollection
+
+    def dump(self, filename: str = "configuration.json") -> None:
+        """Dump actual configuration into JSON file."""
+        with open(filename, "w", encoding="utf-8") as fout:
+            fout.write(self.model_dump_json(indent=4))

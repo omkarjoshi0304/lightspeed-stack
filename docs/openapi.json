@@ -1,0 +1,887 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "foo bar baz service - OpenAPI",
+        "description": "foo bar baz service API specification.",
+        "license": {
+            "name": "Apache 2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "0.0.1"
+    },
+    "paths": {
+        "/": {
+            "get": {
+                "tags": [
+                    "root"
+                ],
+                "summary": "Root Endpoint Handler",
+                "description": "Handle request to the / endpoint.",
+                "operationId": "root_endpoint_handler__get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "text/html": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/info": {
+            "get": {
+                "tags": [
+                    "info"
+                ],
+                "summary": "Info Endpoint Handler",
+                "description": "Handle request to the /info endpoint.",
+                "operationId": "info_endpoint_handler_v1_info_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InfoResponse"
+                                }
+                            }
+                        },
+                        "name": "Service name",
+                        "version": "Service version"
+                    }
+                }
+            }
+        },
+        "/v1/models": {
+            "get": {
+                "tags": [
+                    "models"
+                ],
+                "summary": "Models Endpoint Handler",
+                "description": "Handle requests to the /models endpoint.",
+                "operationId": "models_endpoint_handler_v1_models_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ModelsResponse"
+                                }
+                            }
+                        },
+                        "models": [
+                            {
+                                "identifier": "all-MiniLM-L6-v2",
+                                "metadata": {
+                                    "embedding_dimension": 384
+                                },
+                                "api_model_type": "embedding",
+                                "provider_id": "ollama",
+                                "provider_resource_id": "all-minilm:latest",
+                                "type": "model",
+                                "model_type": "embedding"
+                            },
+                            {
+                                "identifier": "llama3.2:3b-instruct-fp16",
+                                "metadata": {},
+                                "api_model_type": "llm",
+                                "provider_id": "ollama",
+                                "provider_resource_id": "llama3.2:3b-instruct-fp16",
+                                "type": "model",
+                                "model_type": "llm"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "/v1/query": {
+            "post": {
+                "tags": [
+                    "query"
+                ],
+                "summary": "Query Endpoint Handler",
+                "description": "Handle request to the /query endpoint.",
+                "operationId": "query_endpoint_handler_v1_query_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QueryRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/QueryResponse"
+                                }
+                            }
+                        },
+                        "conversation_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "response": "LLM ansert"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/readiness": {
+            "get": {
+                "tags": [
+                    "health"
+                ],
+                "summary": "Readiness Probe Get Method",
+                "description": "Ready status of service.",
+                "operationId": "readiness_probe_get_method_v1_readiness_get",
+                "responses": {
+                    "200": {
+                        "description": "Service is ready",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReadinessResponse"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service is not ready",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotAvailableResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/liveness": {
+            "get": {
+                "tags": [
+                    "health"
+                ],
+                "summary": "Liveness Probe Get Method",
+                "description": "Live status of service.",
+                "operationId": "liveness_probe_get_method_v1_liveness_get",
+                "responses": {
+                    "200": {
+                        "description": "Service is alive",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LivenessResponse"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service is not alive",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LivenessResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/config": {
+            "get": {
+                "tags": [
+                    "config"
+                ],
+                "summary": "Config Endpoint Handler",
+                "description": "Handle requests to the /config endpoint.",
+                "operationId": "config_endpoint_handler_v1_config_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Configuration"
+                                }
+                            }
+                        },
+                        "name": "foo bar baz",
+                        "llama_stack": {
+                            "url": "http://localhost:8321",
+                            "api_key": "xyzzy"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/feedback": {
+            "post": {
+                "tags": [
+                    "feedback"
+                ],
+                "summary": "Feedback Endpoint Handler",
+                "description": "Handle feedback requests.\n\nArgs:\n    feedback_request: The request containing feedback information.\n    ensure_feedback_enabled: The feedback handler (FastAPI Depends) that\n        will handle feedback status checks.\n    auth: The Authentication handler (FastAPI Depends) that will\n        handle authentication Logic.\n\nReturns:\n    Response indicating the status of the feedback storage request.",
+                "operationId": "feedback_endpoint_handler_v1_feedback_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FeedbackResponse"
+                                }
+                            }
+                        },
+                        "response": "Feedback received and stored"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/feedback/status": {
+            "get": {
+                "tags": [
+                    "feedback"
+                ],
+                "summary": "Feedback Status",
+                "description": "Handle feedback status requests.\n\nReturns:\n    Response indicating the status of the feedback.",
+                "operationId": "feedback_status_v1_feedback_status_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StatusResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Attachment": {
+                "properties": {
+                    "attachment_type": {
+                        "type": "string",
+                        "title": "Attachment Type"
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "title": "Content Type"
+                    },
+                    "content": {
+                        "type": "string",
+                        "title": "Content"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "attachment_type",
+                    "content_type",
+                    "content"
+                ],
+                "title": "Attachment",
+                "description": "Model representing an attachment that can be send from UI as part of query.\n\nList of attachments can be optional part of 'query' request.\n\nAttributes:\n    attachment_type: The attachment type, like \"log\", \"configuration\" etc.\n    content_type: The content type as defined in MIME standard\n    content: The actual attachment content\n\nYAML attachments with **kind** and **metadata/name** attributes will\nbe handled as resources with specified name:\n```\nkind: Pod\nmetadata:\n    name: private-reg\n```",
+                "examples": [
+                    {
+                        "attachment_type": "log",
+                        "content": "this is attachment",
+                        "content_type": "text/plain"
+                    },
+                    {
+                        "attachment_type": "configuration",
+                        "content": "kind: Pod\n metadata:\n name:    private-reg",
+                        "content_type": "application/yaml"
+                    },
+                    {
+                        "attachment_type": "configuration",
+                        "content": "foo: bar",
+                        "content_type": "application/yaml"
+                    }
+                ]
+            },
+            "Configuration": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "service": {
+                        "$ref": "#/components/schemas/ServiceConfiguration"
+                    },
+                    "llama_stack": {
+                        "$ref": "#/components/schemas/LLamaStackConfiguration"
+                    },
+                    "user_data_collection": {
+                        "$ref": "#/components/schemas/UserDataCollection"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "service",
+                    "llama_stack",
+                    "user_data_collection"
+                ],
+                "title": "Configuration",
+                "description": "Global service configuration."
+            },
+            "FeedbackRequest": {
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "title": "Conversation Id"
+                    },
+                    "user_question": {
+                        "type": "string",
+                        "title": "User Question"
+                    },
+                    "llm_response": {
+                        "type": "string",
+                        "title": "Llm Response"
+                    },
+                    "sentiment": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Sentiment"
+                    },
+                    "user_feedback": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "maxLength": 4096
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "User Feedback",
+                        "description": "Feedback on the LLM response.",
+                        "examples": [
+                            "I'm not satisfied with the response because it is too vague."
+                        ]
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "conversation_id",
+                    "user_question",
+                    "llm_response"
+                ],
+                "title": "FeedbackRequest",
+                "description": "Model representing a feedback request.\n\nAttributes:\n    conversation_id: The required conversation ID (UUID).\n    user_question: The required user question.\n    llm_response: The required LLM response.\n    sentiment: The optional sentiment.\n    user_feedback: The optional user feedback.\n\nExample:\n    ```python\n    feedback_request = FeedbackRequest(\n        conversation_id=\"12345678-abcd-0000-0123-456789abcdef\",\n        user_question=\"what are you doing?\",\n        user_feedback=\"Great service!\",\n        llm_response=\"I don't know\",\n        sentiment=-1,\n    )\n    ```",
+                "examples": [
+                    {
+                        "conversation_id": "12345678-abcd-0000-0123-456789abcdef",
+                        "llm_response": "bar",
+                        "sentiment": 1,
+                        "user_feedback": "Great service!",
+                        "user_question": "foo"
+                    }
+                ]
+            },
+            "FeedbackResponse": {
+                "properties": {
+                    "response": {
+                        "type": "string",
+                        "title": "Response"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "response"
+                ],
+                "title": "FeedbackResponse",
+                "description": "Model representing a response to a feedback request.\n\nAttributes:\n    response: The response of the feedback request.\n\nExample:\n    ```python\n    feedback_response = FeedbackResponse(response=\"feedback received\")\n    ```",
+                "examples": [
+                    {
+                        "response": "feedback received"
+                    }
+                ]
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "InfoResponse": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "version": {
+                        "type": "string",
+                        "title": "Version"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "version"
+                ],
+                "title": "InfoResponse",
+                "description": "Model representing a response to a info request.\n\nAttributes:\n    name: Service name.\n    version: Service version.\n\nExample:\n    ```python\n    info_response = InfoResponse(\n        name=\"Lightspeed Stack\",\n        version=\"1.0.0\",\n    )\n    ```",
+                "examples": [
+                    {
+                        "name": "Lightspeed Stack",
+                        "version": "1.0.0"
+                    }
+                ]
+            },
+            "LLamaStackConfiguration": {
+                "properties": {
+                    "url": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Url"
+                    },
+                    "api_key": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Api Key"
+                    },
+                    "use_as_library_client": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Use As Library Client"
+                    },
+                    "library_client_config_path": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Library Client Config Path"
+                    }
+                },
+                "type": "object",
+                "title": "LLamaStackConfiguration",
+                "description": "Llama stack configuration."
+            },
+            "LivenessResponse": {
+                "properties": {
+                    "alive": {
+                        "type": "boolean",
+                        "title": "Alive"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "alive"
+                ],
+                "title": "LivenessResponse",
+                "description": "Model representing a response to a liveness request.\n\nAttributes:\n    alive: If app is alive.\n\nExample:\n    ```python\n    liveness_response = LivenessResponse(alive=True)\n    ```",
+                "examples": [
+                    {
+                        "alive": true
+                    }
+                ]
+            },
+            "ModelsResponse": {
+                "properties": {
+                    "models": {
+                        "items": {
+                            "additionalProperties": true,
+                            "type": "object"
+                        },
+                        "type": "array",
+                        "title": "Models"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "models"
+                ],
+                "title": "ModelsResponse",
+                "description": "Model representing a response to models request."
+            },
+            "NotAvailableResponse": {
+                "properties": {
+                    "detail": {
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "type": "object",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "detail"
+                ],
+                "title": "NotAvailableResponse",
+                "description": "Model representing error response for readiness endpoint.",
+                "examples": [
+                    {
+                        "detail": {
+                            "cause": "Index is not ready",
+                            "response": "Service is not ready"
+                        }
+                    },
+                    {
+                        "detail": {
+                            "cause": "LLM is not ready",
+                            "response": "Service is not ready"
+                        }
+                    }
+                ]
+            },
+            "QueryRequest": {
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "title": "Query"
+                    },
+                    "conversation_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Conversation Id"
+                    },
+                    "provider": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Provider"
+                    },
+                    "model": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Model"
+                    },
+                    "system_prompt": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "System Prompt"
+                    },
+                    "attachments": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "$ref": "#/components/schemas/Attachment"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Attachments"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "query"
+                ],
+                "title": "QueryRequest",
+                "description": "Model representing a request for the LLM (Language Model).\n\nAttributes:\n    query: The query string.\n    conversation_id: The optional conversation ID (UUID).\n    provider: The optional provider.\n    model: The optional model.\n    system_prompt: The optional system prompt.\n    attachments: The optional attachments.\n\nExample:\n    ```python\n    query_request = QueryRequest(query=\"Tell me about Kubernetes\")\n    ```",
+                "examples": [
+                    {
+                        "attachments": [
+                            {
+                                "attachment_type": "log",
+                                "content": "this is attachment",
+                                "content_type": "text/plain"
+                            },
+                            {
+                                "attachment_type": "configuration",
+                                "content": "kind: Pod\n metadata:\n    name: private-reg",
+                                "content_type": "application/yaml"
+                            },
+                            {
+                                "attachment_type": "configuration",
+                                "content": "foo: bar",
+                                "content_type": "application/yaml"
+                            }
+                        ],
+                        "conversation_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "model": "model-name",
+                        "provider": "openai",
+                        "query": "write a deployment yaml for the mongodb image",
+                        "system_prompt": "You are a helpful assistant"
+                    }
+                ]
+            },
+            "QueryResponse": {
+                "properties": {
+                    "conversation_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Conversation Id"
+                    },
+                    "response": {
+                        "type": "string",
+                        "title": "Response"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "response"
+                ],
+                "title": "QueryResponse",
+                "description": "Model representing LLM response to a query.\n\nAttributes:\n    conversation_id: The optional conversation ID (UUID).\n    response: The response.",
+                "examples": [
+                    {
+                        "conversation_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "response": "Operator Lifecycle Manager (OLM) helps users install..."
+                    }
+                ]
+            },
+            "ReadinessResponse": {
+                "properties": {
+                    "ready": {
+                        "type": "boolean",
+                        "title": "Ready"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "title": "Reason"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "ready",
+                    "reason"
+                ],
+                "title": "ReadinessResponse",
+                "description": "Model representing a response to a readiness request.\n\nAttributes:\n    ready: The readiness of the service.\n    reason: The reason for the readiness.\n\nExample:\n    ```python\n    readiness_response = ReadinessResponse(ready=True, reason=\"service is ready\")\n    ```",
+                "examples": [
+                    {
+                        "ready": true,
+                        "reason": "service is ready"
+                    }
+                ]
+            },
+            "ServiceConfiguration": {
+                "properties": {
+                    "host": {
+                        "type": "string",
+                        "title": "Host",
+                        "default": "localhost"
+                    },
+                    "port": {
+                        "type": "integer",
+                        "title": "Port",
+                        "default": 8080
+                    },
+                    "auth_enabled": {
+                        "type": "boolean",
+                        "title": "Auth Enabled",
+                        "default": false
+                    },
+                    "workers": {
+                        "type": "integer",
+                        "title": "Workers",
+                        "default": 1
+                    },
+                    "color_log": {
+                        "type": "boolean",
+                        "title": "Color Log",
+                        "default": true
+                    },
+                    "access_log": {
+                        "type": "boolean",
+                        "title": "Access Log",
+                        "default": true
+                    }
+                },
+                "type": "object",
+                "title": "ServiceConfiguration",
+                "description": "Service configuration."
+            },
+            "StatusResponse": {
+                "properties": {
+                    "functionality": {
+                        "type": "string",
+                        "title": "Functionality"
+                    },
+                    "status": {
+                        "additionalProperties": true,
+                        "type": "object",
+                        "title": "Status"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "functionality",
+                    "status"
+                ],
+                "title": "StatusResponse",
+                "description": "Model representing a response to a status request.\n\nAttributes:\n    functionality: The functionality of the service.\n    status: The status of the service.\n\nExample:\n    ```python\n    status_response = StatusResponse(\n        functionality=\"feedback\",\n        status={\"enabled\": True},\n    )\n    ```",
+                "examples": [
+                    {
+                        "functionality": "feedback",
+                        "status": {
+                            "enabled": true
+                        }
+                    }
+                ]
+            },
+            "UserDataCollection": {
+                "properties": {
+                    "feedback_disabled": {
+                        "type": "boolean",
+                        "title": "Feedback Disabled",
+                        "default": true
+                    },
+                    "feedback_storage": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Feedback Storage"
+                    }
+                },
+                "type": "object",
+                "title": "UserDataCollection",
+                "description": "User data collection configuration."
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        }
+    }
+}

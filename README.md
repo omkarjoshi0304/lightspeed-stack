@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-Apache-blue)](https://github.com/lightspeed-core/lightspeed-stack/blob/main/LICENSE)
 [![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)
 
-Lightspeed Core Stack (LCS) is an AI powered assistant that provides answers to product questions using backend LLM services.
+Lightspeed Core Stack (LCS) is an AI powered assistant that provides answers to product questions using backend LLM services, agents, and RAG databases.
 
 
 <!-- vim-markdown-toc GFM -->
@@ -17,6 +17,10 @@ Lightspeed Core Stack (LCS) is an AI powered assistant that provides answers to 
 * [Usage](#usage)
 * [Contributing](#contributing)
 * [License](#license)
+* [Additional tools](#additional-tools)
+    * [Utility to generate OpenAPI schema](#utility-to-generate-openapi-schema)
+        * [Path](#path)
+        * [Usage](#usage-1)
 
 <!-- vim-markdown-toc -->
 
@@ -39,3 +43,22 @@ Lightspeed Core Stack (LCS) is an AI powered assistant that provides answers to 
 # License
 
 Published under the Apache 2.0 License
+
+
+
+# Additional tools
+
+## Utility to generate OpenAPI schema
+
+This script re-generated OpenAPI schema for the Lightspeed Service REST API.
+
+### Path
+
+[scripts/generate_openapi_schema.py](scripts/generate_openapi_schema.py)
+
+### Usage
+
+```
+make schema
+```
+

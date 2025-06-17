@@ -3,12 +3,32 @@ set namespaceSeparator none
 class "Configuration" as src.models.config.Configuration {
   llama_stack
   name : str
+  service
+  user_data_collection
+  dump(filename: str) -> None
 }
 class "LLamaStackConfiguration" as src.models.config.LLamaStackConfiguration {
   api_key : Optional[str]
+  library_client_config_path : Optional[str]
   url : Optional[str]
   use_as_library_client : Optional[bool]
   check_llama_stack_model() -> Self
 }
+class "ServiceConfiguration" as src.models.config.ServiceConfiguration {
+  access_log : bool
+  auth_enabled : bool
+  color_log : bool
+  host : str
+  port : int
+  workers : int
+  check_service_configuration() -> Self
+}
+class "UserDataCollection" as src.models.config.UserDataCollection {
+  feedback_disabled : bool
+  feedback_storage : Optional[str]
+  check_storage_location_is_set_when_needed() -> Self
+}
 src.models.config.LLamaStackConfiguration --* src.models.config.Configuration : llama_stack
+src.models.config.ServiceConfiguration --* src.models.config.Configuration : service
+src.models.config.UserDataCollection --* src.models.config.Configuration : user_data_collection
 @enduml

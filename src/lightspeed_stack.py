@@ -6,7 +6,6 @@ import logging
 from rich.logging import RichHandler
 
 from runners.uvicorn import start_uvicorn
-from models.config import Configuration
 from configuration import configuration
 
 
@@ -40,12 +39,6 @@ def create_argument_parser() -> ArgumentParser:
     return parser
 
 
-def dump_configuration(service_configuration: Configuration) -> None:
-    """Dump actual configuration into JSON file."""
-    with open("configuration.json", "w", encoding="utf-8") as fout:
-        fout.write(service_configuration.model_dump_json(indent=4))
-
-
 def main() -> None:
     """Entry point to the web service."""
     logger.info("Lightspeed stack startup")
@@ -59,7 +52,7 @@ def main() -> None:
     )
 
     if args.dump_configuration:
-        dump_configuration(configuration.configuration)
+        configuration.configuration.dump()
     else:
         start_uvicorn(configuration.service_configuration)
     logger.info("Lightspeed stack finished")
