@@ -32,6 +32,12 @@ Lightspeed Core Stack (LCS) is an AI powered assistant that provides answers to 
 
 # Installation
 
+Installation steps depends on operation system. Please look at instructions for your system:
+
+
+- [Linux installation](https://lightspeed-core.github.io/lightspeed-stack/installation_linux)
+- [macOS installation](https://lightspeed-core.github.io/lightspeed-stack/installation_macos)
+
 # Configuration
 
 # Usage
