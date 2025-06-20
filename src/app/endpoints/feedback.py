@@ -12,6 +12,7 @@ from configuration import configuration
 from models.responses import FeedbackResponse, StatusResponse
 from models.requests import FeedbackRequest
 from utils.suid import get_suid
+from utils.common import retrieve_user_id, auth_dependency
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/feedback", tags=["feedback"])
@@ -29,33 +30,6 @@ def is_feedback_enabled() -> bool:
         bool: True if feedback is enabled, False otherwise.
     """
     return not configuration.user_data_collection_configuration.feedback_disabled
-
-
-# TODO(lucasagomes): implement this function to retrieve user ID from auth
-def retrieve_user_id(auth: Any) -> str:  # pylint: disable=unused-argument
-    """Retrieve the user ID from the authentication handler.
-
-    Args:
-        auth: The Authentication handler (FastAPI Depends) that will
-            handle authentication Logic.
-
-    Returns:
-        str: The user ID.
-    """
-    return "user_id_placeholder"
-
-
-# TODO(lucasagomes): implement this function to handle authentication
-async def auth_dependency(_request: Request) -> bool:
-    """Authenticate dependency to ensure the user is authenticated.
-
-    Args:
-        request (Request): The FastAPI request object.
-
-    Raises:
-        HTTPException: If the user is not authenticated.
-    """
-    return True
 
 
 async def assert_feedback_enabled(_request: Request) -> None:

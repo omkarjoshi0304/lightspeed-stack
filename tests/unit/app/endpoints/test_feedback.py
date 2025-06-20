@@ -4,9 +4,7 @@ import pytest
 from configuration import configuration
 from app.endpoints.feedback import (
     is_feedback_enabled,
-    retrieve_user_id,
     assert_feedback_enabled,
-    auth_dependency,
     feedback_endpoint_handler,
     store_feedback,
     feedback_status,
@@ -23,13 +21,6 @@ def test_is_feedback_disabled():
     """Test that is_feedback_enabled returns False when feedback is disabled."""
     configuration.user_data_collection_configuration.feedback_disabled = True
     assert is_feedback_enabled() is False, "Feedback should be disabled"
-
-
-# TODO(lucasagomes): Implement this test when the retrieve_user_id function is implemented
-def test_retrieve_user_id():
-    """Test that retrieve_user_id returns a user ID."""
-    user_id = retrieve_user_id(None)
-    assert user_id == "user_id_placeholder"
 
 
 async def test_assert_feedback_enabled_disabled(mocker):
@@ -55,18 +46,11 @@ async def test_assert_feedback_enabled(mocker):
     await assert_feedback_enabled(mocker.Mock())
 
 
-# TODO(lucasagomes): Implement this test when the auth_dependency function is implemented
-async def test_auth_dependency(mocker):
-    """Test that auth_dependency does not raise an exception."""
-    result = await auth_dependency(mocker.Mock())
-    assert result is True
-
-
 def test_feedback_endpoint_handler(mocker):
     """Test that feedback_endpoint_handler processes feedback correctly."""
     # Mock the dependencies
     mocker.patch("app.endpoints.feedback.assert_feedback_enabled", return_value=None)
-    mocker.patch("app.endpoints.feedback.retrieve_user_id", return_value="test_user_id")
+    mocker.patch("utils.common.retrieve_user_id", return_value="test_user_id")
     mocker.patch("app.endpoints.feedback.store_feedback", return_value=None)
 
     # Mock the feedback request
@@ -87,7 +71,7 @@ def test_feedback_endpoint_handler_error(mocker):
     """Test that feedback_endpoint_handler raises an HTTPException on error."""
     # Mock the dependencies
     mocker.patch("app.endpoints.feedback.assert_feedback_enabled", return_value=None)
-    mocker.patch("app.endpoints.feedback.retrieve_user_id", return_value="test_user_id")
+    mocker.patch("utils.common.retrieve_user_id", return_value="test_user_id")
     mocker.patch(
         "app.endpoints.feedback.store_feedback",
         side_effect=Exception("Error storing feedback"),

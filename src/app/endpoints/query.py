@@ -1,6 +1,10 @@
 """Handler for REST API call to provide answer to query."""
 
+from datetime import datetime, UTC
+import json
 import logging
+import os
+from pathlib import Path
 from typing import Any
 
 from llama_stack_client.lib.agents.agent import Agent  # type: ignore
@@ -8,13 +12,15 @@ from llama_stack_client import LlamaStackClient  # type: ignore
 from llama_stack_client.types import UserMessage  # type: ignore
 from llama_stack_client.types.model_list_response import ModelListResponse
 
-from fastapi import APIRouter, Request, HTTPException, status
+from fastapi import APIRouter, Request, HTTPException, status, Depends
 
 from client import get_llama_stack_client
 from configuration import configuration
 from models.responses import QueryResponse
 from models.requests import QueryRequest, Attachment
 import constants
+from utils.common import retrieve_user_id, auth_dependency
+from utils.suid import get_suid
 
 logger = logging.getLogger("app.endpoints.handlers")
 router = APIRouter(tags=["query"])
@@ -28,19 +34,57 @@ query_response: dict[int | str, dict[str, Any]] = {
 }
 
 
+def is_transcripts_enabled() -> bool:
+    """Check if transcripts is enabled.
+
+    Returns:
+        bool: True if transcripts is enabled, False otherwise.
+    """
+    return not configuration.user_data_collection_configuration.transcripts_disabled
+
+
+def retrieve_conversation_id(query_request: QueryRequest) -> str:
+    """Retrieve conversation ID based on existing ID or on newly generated one."""
+    conversation_id = query_request.conversation_id
+
+    # Generate a new conversation ID if not provided
+    if not conversation_id:
+        conversation_id = get_suid()
+        logger.info("Generated new conversation ID: %s", conversation_id)
+
+    return conversation_id
+
+
 @router.post("/query", responses=query_response)
 def query_endpoint_handler(
-    _request: Request, query_request: QueryRequest
+    _request: Request,
+    query_request: QueryRequest,
+    auth: Any = Depends(auth_dependency),
 ) -> QueryResponse:
     """Handle request to the /query endpoint."""
     llama_stack_config = configuration.llama_stack_configuration
     logger.info("LLama stack config: %s", llama_stack_config)
     client = get_llama_stack_client(llama_stack_config)
     model_id = select_model_id(client, query_request)
+    conversation_id = retrieve_conversation_id(query_request)
     response = retrieve_response(client, model_id, query_request)
-    return QueryResponse(
-        conversation_id=query_request.conversation_id, response=response
-    )
+
+    if not is_transcripts_enabled():
+        logger.debug("Transcript collection is disabled in the configuration")
+    else:
+        store_transcript(
+            user_id=retrieve_user_id(auth),
+            conversation_id=conversation_id,
+            query_is_valid=True,  # TODO(lucasagomes): implement as part of query validation
+            query=query_request.query,
+            query_request=query_request,
+            response=response,
+            rag_chunks=[],  # TODO(lucasagomes): implement rag_chunks
+            truncated=False,  # TODO(lucasagomes): implement truncation as part of quota work
+            attachments=query_request.attachments or [],
+        )
+
+    return QueryResponse(conversation_id=conversation_id, response=response)
 
 
 def select_model_id(client: LlamaStackClient, query_request: QueryRequest) -> str:
@@ -158,3 +202,66 @@ def validate_attachments_metadata(attachments: list[Attachment]) -> None:
                     "cause": message,
                 },
             )
+
+
+def construct_transcripts_path(user_id: str, conversation_id: str) -> Path:
+    """Construct path to transcripts."""
+    # these two normalizations are required by Snyk as it detects
+    # this Path sanitization pattern
+    uid = os.path.normpath("/" + user_id).lstrip("/")
+    cid = os.path.normpath("/" + conversation_id).lstrip("/")
+    file_path = (
+        configuration.user_data_collection_configuration.transcripts_storage or ""
+    )
+    return Path(file_path, uid, cid)
+
+
+def store_transcript(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    user_id: str,
+    conversation_id: str,
+    query_is_valid: bool,
+    query: str,
+    query_request: QueryRequest,
+    response: str,
+    rag_chunks: list[str],
+    truncated: bool,
+    attachments: list[Attachment],
+) -> None:
+    """Store transcript in the local filesystem.
+
+    Args:
+        user_id: The user ID (UUID).
+        conversation_id: The conversation ID (UUID).
+        query_is_valid: The result of the query validation.
+        query: The query (without attachments).
+        query_request: The request containing a query.
+        response: The response to store.
+        rag_chunks: The list of `RagChunk` objects.
+        truncated: The flag indicating if the history was truncated.
+        attachments: The list of `Attachment` objects.
+    """
+    transcripts_path = construct_transcripts_path(user_id, conversation_id)
+    transcripts_path.mkdir(parents=True, exist_ok=True)
+
+    data_to_store = {
+        "metadata": {
+            "provider": query_request.provider,
+            "model": query_request.model,
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        },
+        "redacted_query": query,
+        "query_is_valid": query_is_valid,
+        "llm_response": response,
+        "rag_chunks": rag_chunks,
+        "truncated": truncated,
+        "attachments": [attachment.model_dump() for attachment in attachments],
+    }
+
+    # stores feedback in a file under unique uuid
+    transcript_file_path = transcripts_path / f"{get_suid()}.json"
+    with open(transcript_file_path, "w", encoding="utf-8") as transcript_file:
+        json.dump(data_to_store, transcript_file)
+
+    logger.info("Transcript successfully stored at: %s", transcript_file_path)

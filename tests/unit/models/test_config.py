@@ -87,8 +87,8 @@ def test_llama_stack_wrong_configuration_no_config_file() -> None:
         LLamaStackConfiguration(use_as_library_client=True)
 
 
-def test_user_data_collection_collection_enabled() -> None:
-    """Test the UserDataCollection constructor."""
+def test_user_data_collection_feedback_enabled() -> None:
+    """Test the UserDataCollection constructor for feedback."""
     # correct configuration
     cfg = UserDataCollection(feedback_disabled=True, feedback_storage=None)
     assert cfg is not None
@@ -96,18 +96,31 @@ def test_user_data_collection_collection_enabled() -> None:
     assert cfg.feedback_storage is None
 
 
-def test_user_data_collection_colection_disabled() -> None:
-    """Test the UserDataCollection constructor."""
-    # correct configuration
-    cfg = UserDataCollection(feedback_disabled=False, feedback_storage="")
-    assert cfg is not None
-
+def test_user_data_collection_feedback_disabled() -> None:
+    """Test the UserDataCollection constructor for feedback."""
     # incorrect configuration
     with pytest.raises(
         ValueError,
         match="feedback_storage is required when feedback is enabled",
     ):
         UserDataCollection(feedback_disabled=False, feedback_storage=None)
+
+
+def test_user_data_collection_transcripts_enabled() -> None:
+    """Test the UserDataCollection constructor for transcripts."""
+    # correct configuration
+    cfg = UserDataCollection(transcripts_disabled=True, transcripts_storage=None)
+    assert cfg is not None
+
+
+def test_user_data_collection_transcripts_disabled() -> None:
+    """Test the UserDataCollection constructor for transcripts."""
+    # incorrect configuration
+    with pytest.raises(
+        ValueError,
+        match="transcripts_storage is required when transcripts is enabled",
+    ):
+        UserDataCollection(transcripts_disabled=False, transcripts_storage=None)
 
 
 def test_dump_configuration(tmp_path) -> None:
