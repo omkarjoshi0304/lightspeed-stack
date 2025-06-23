@@ -42,6 +42,16 @@ Installation steps depends on operation system. Please look at instructions for 
 
 # Usage
 
+## Running Linux container image
+
+Container image is built every time a new pull request is merged to main branch. Currently there are tags `latest` and `main` pointing to the latest image.
+
+To pull and run the image with own configuration:
+
+1. `podman pull quay.io/lightspeed-core/lightspeed-stack:latest`
+1. `podman run -it -p 8080:8080 -v my-lightspeed-stack-config.yaml:/app-root/lightspeed-stack.yaml:Z quay.io/lightspeed-core/lightspeed-stack:latest`
+1. Open `localhost:8080` in your browser
+
 # Contributing
 
 * See [contributors](CONTRIBUTING.md) guide.

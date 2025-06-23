@@ -12,7 +12,8 @@ from configuration import configuration
 from models.responses import FeedbackResponse, StatusResponse
 from models.requests import FeedbackRequest
 from utils.suid import get_suid
-from utils.common import retrieve_user_id, auth_dependency
+from utils.auth import auth_dependency
+from utils.common import retrieve_user_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/feedback", tags=["feedback"])

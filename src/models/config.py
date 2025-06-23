@@ -2,9 +2,22 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, FilePath
 
 from typing_extensions import Self
+
+
+class TLSConfiguration(BaseModel):
+    """TLS configuration."""
+
+    tls_certificate_path: Optional[FilePath] = None
+    tls_key_path: Optional[FilePath] = None
+    tls_key_password: Optional[FilePath] = None
+
+    @model_validator(mode="after")
+    def check_tls_configuration(self) -> Self:
+        """Check TLS configuration."""
+        return self
 
 
 class ServiceConfiguration(BaseModel):
@@ -16,6 +29,7 @@ class ServiceConfiguration(BaseModel):
     workers: int = 1
     color_log: bool = True
     access_log: bool = True
+    tls_config: TLSConfiguration = TLSConfiguration()
 
     @model_validator(mode="after")
     def check_service_configuration(self) -> Self:

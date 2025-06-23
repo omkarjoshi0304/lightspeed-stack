@@ -19,7 +19,8 @@ from configuration import configuration
 from models.responses import QueryResponse
 from models.requests import QueryRequest, Attachment
 import constants
-from utils.common import retrieve_user_id, auth_dependency
+from utils.auth import auth_dependency
+from utils.common import retrieve_user_id
 from utils.suid import get_suid
 
 logger = logging.getLogger("app.endpoints.handlers")
