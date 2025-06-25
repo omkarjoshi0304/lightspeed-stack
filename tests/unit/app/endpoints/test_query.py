@@ -1,7 +1,8 @@
+import json
 from fastapi import HTTPException, status
 import pytest
 
-from configuration import configuration
+from configuration import AppConfig
 from app.endpoints.query import (
     query_endpoint_handler,
     select_model_id,
@@ -13,18 +14,56 @@ from app.endpoints.query import (
     store_transcript,
 )
 from models.requests import QueryRequest, Attachment
+from models.config import ModelContextProtocolServer
 from llama_stack_client.types import UserMessage  # type: ignore
 
 
-def test_is_transcripts_enabled():
-    """Test that is_transcripts_enabled returns True when feedback is not disabled."""
-    configuration.user_data_collection_configuration.transcripts_disabled = False
+@pytest.fixture
+def setup_configuration():
+    """Set up configuration for tests."""
+    config_dict = {
+        "name": "test",
+        "service": {
+            "host": "localhost",
+            "port": 8080,
+            "auth_enabled": False,
+            "workers": 1,
+            "color_log": True,
+            "access_log": True,
+        },
+        "llama_stack": {
+            "api_key": "test-key",
+            "url": "http://test.com:1234",
+            "use_as_library_client": False,
+        },
+        "user_data_collection": {
+            "transcripts_disabled": True,
+        },
+        "mcp_servers": [],
+    }
+    cfg = AppConfig()
+    cfg.init_from_dict(config_dict)
+    return cfg
+
+
+def test_is_transcripts_enabled(setup_configuration, mocker):
+    """Test that is_transcripts_enabled returns True when transcripts is not disabled."""
+    # Override the transcripts_disabled setting
+    mocker.patch.object(
+        setup_configuration.user_data_collection_configuration,
+        "transcripts_disabled",
+        False,
+    )
+    mocker.patch("app.endpoints.query.configuration", setup_configuration)
+
     assert is_transcripts_enabled() is True, "Transcripts should be enabled"
 
 
-def test_is_transcripts_disabled():
-    """Test that is_transcripts_enabled returns False when feedback is disabled."""
-    configuration.user_data_collection_configuration.transcripts_disabled = True
+def test_is_transcripts_disabled(setup_configuration, mocker):
+    """Test that is_transcripts_enabled returns False when transcripts is disabled."""
+    # Use default transcripts_disabled=True from setup
+    mocker.patch("app.endpoints.query.configuration", setup_configuration)
+
     assert is_transcripts_enabled() is False, "Transcripts should be disabled"
 
 
@@ -75,7 +114,7 @@ def _test_query_endpoint_handler(mocker, store_transcript=False):
 
     query_request = QueryRequest(query=query)
 
-    response = query_endpoint_handler(None, query_request)
+    response = query_endpoint_handler(query_request)
 
     # Assert the response is as expected
     assert response.response == "LLM answer"
@@ -245,12 +284,17 @@ def test_retrieve_response_no_available_shields(mocker):
     mock_client = mocker.Mock()
     mock_client.shields.list.return_value = []
 
+    # Mock configuration with empty MCP servers
+    mock_config = mocker.Mock()
+    mock_config.mcp_servers = []
+    mocker.patch("app.endpoints.query.configuration", mock_config)
     mocker.patch("app.endpoints.query.Agent", return_value=mock_agent)
 
     query_request = QueryRequest(query="What is OpenStack?")
     model_id = "fake_model_id"
+    access_token = "test_token"
 
-    response = retrieve_response(mock_client, model_id, query_request)
+    response = retrieve_response(mock_client, model_id, query_request, access_token)
 
     assert response == "LLM answer"
     mock_agent.create_turn.assert_called_once_with(
@@ -276,12 +320,17 @@ def test_retrieve_response_one_available_shield(mocker):
     mock_client = mocker.Mock()
     mock_client.shields.list.return_value = [MockShield("shield1")]
 
+    # Mock configuration with empty MCP servers
+    mock_config = mocker.Mock()
+    mock_config.mcp_servers = []
+    mocker.patch("app.endpoints.query.configuration", mock_config)
     mocker.patch("app.endpoints.query.Agent", return_value=mock_agent)
 
     query_request = QueryRequest(query="What is OpenStack?")
     model_id = "fake_model_id"
+    access_token = "test_token"
 
-    response = retrieve_response(mock_client, model_id, query_request)
+    response = retrieve_response(mock_client, model_id, query_request, access_token)
 
     assert response == "LLM answer"
     mock_agent.create_turn.assert_called_once_with(
@@ -310,12 +359,17 @@ def test_retrieve_response_two_available_shields(mocker):
         MockShield("shield2"),
     ]
 
+    # Mock configuration with empty MCP servers
+    mock_config = mocker.Mock()
+    mock_config.mcp_servers = []
+    mocker.patch("app.endpoints.query.configuration", mock_config)
     mocker.patch("app.endpoints.query.Agent", return_value=mock_agent)
 
     query_request = QueryRequest(query="What is OpenStack?")
     model_id = "fake_model_id"
+    access_token = "test_token"
 
-    response = retrieve_response(mock_client, model_id, query_request)
+    response = retrieve_response(mock_client, model_id, query_request, access_token)
 
     assert response == "LLM answer"
     mock_agent.create_turn.assert_called_once_with(
@@ -333,6 +387,11 @@ def test_retrieve_response_with_one_attachment(mocker):
     mock_client = mocker.Mock()
     mock_client.shields.list.return_value = []
 
+    # Mock configuration with empty MCP servers
+    mock_config = mocker.Mock()
+    mock_config.mcp_servers = []
+    mocker.patch("app.endpoints.query.configuration", mock_config)
+
     attachments = [
         Attachment(
             attachment_type="log",
@@ -344,8 +403,9 @@ def test_retrieve_response_with_one_attachment(mocker):
 
     query_request = QueryRequest(query="What is OpenStack?", attachments=attachments)
     model_id = "fake_model_id"
+    access_token = "test_token"
 
-    response = retrieve_response(mock_client, model_id, query_request)
+    response = retrieve_response(mock_client, model_id, query_request, access_token)
 
     assert response == "LLM answer"
     mock_agent.create_turn.assert_called_once_with(
@@ -368,6 +428,11 @@ def test_retrieve_response_with_two_attachments(mocker):
     mock_client = mocker.Mock()
     mock_client.shields.list.return_value = []
 
+    # Mock configuration with empty MCP servers
+    mock_config = mocker.Mock()
+    mock_config.mcp_servers = []
+    mocker.patch("app.endpoints.query.configuration", mock_config)
+
     attachments = [
         Attachment(
             attachment_type="log",
@@ -384,8 +449,9 @@ def test_retrieve_response_with_two_attachments(mocker):
 
     query_request = QueryRequest(query="What is OpenStack?", attachments=attachments)
     model_id = "fake_model_id"
+    access_token = "test_token"
 
-    response = retrieve_response(mock_client, model_id, query_request)
+    response = retrieve_response(mock_client, model_id, query_request, access_token)
 
     assert response == "LLM answer"
     mock_agent.create_turn.assert_called_once_with(
@@ -405,12 +471,114 @@ def test_retrieve_response_with_two_attachments(mocker):
     )
 
 
-def test_construct_transcripts_path(mocker):
-    """Test the construct_transcripts_path function."""
+def test_retrieve_response_with_mcp_servers(mocker):
+    """Test the retrieve_response function with MCP servers configured."""
+    mock_agent = mocker.Mock()
+    mock_agent.create_turn.return_value.output_message.content = "LLM answer"
+    mock_client = mocker.Mock()
+    mock_client.shields.list.return_value = []
 
-    configuration.user_data_collection_configuration.transcripts_storage = (
+    # Mock configuration with MCP servers
+    mcp_servers = [
+        ModelContextProtocolServer(
+            name="filesystem-server", url="http://localhost:3000"
+        ),
+        ModelContextProtocolServer(
+            name="git-server",
+            provider_id="custom-git",
+            url="https://git.example.com/mcp",
+        ),
+    ]
+    mock_config = mocker.Mock()
+    mock_config.mcp_servers = mcp_servers
+    mocker.patch("app.endpoints.query.configuration", mock_config)
+    mock_agent_class = mocker.patch(
+        "app.endpoints.query.Agent", return_value=mock_agent
+    )
+
+    query_request = QueryRequest(query="What is OpenStack?")
+    model_id = "fake_model_id"
+    access_token = "test_token_123"
+
+    response = retrieve_response(mock_client, model_id, query_request, access_token)
+
+    assert response == "LLM answer"
+
+    # Verify Agent was created with MCP server tools and headers
+    mock_agent_class.assert_called_once()
+    agent_kwargs = mock_agent_class.call_args[1]
+
+    # Check that tools include MCP server names
+    assert "filesystem-server" in agent_kwargs["tools"]
+    assert "git-server" in agent_kwargs["tools"]
+
+    # Check that extra_headers contains MCP headers with authorization
+
+    extra_headers_data = json.loads(
+        agent_kwargs["extra_headers"]["X-LlamaStack-Provider-Data"]
+    )
+    mcp_headers = extra_headers_data["mcp_headers"]
+
+    assert "http://localhost:3000" in mcp_headers
+    assert (
+        mcp_headers["http://localhost:3000"]["Authorization"] == "Bearer test_token_123"
+    )
+    assert "https://git.example.com/mcp" in mcp_headers
+    assert (
+        mcp_headers["https://git.example.com/mcp"]["Authorization"]
+        == "Bearer test_token_123"
+    )
+
+
+def test_retrieve_response_with_mcp_servers_empty_token(mocker):
+    """Test the retrieve_response function with MCP servers and empty access token."""
+    mock_agent = mocker.Mock()
+    mock_agent.create_turn.return_value.output_message.content = "LLM answer"
+    mock_client = mocker.Mock()
+    mock_client.shields.list.return_value = []
+
+    # Mock configuration with MCP servers
+    mcp_servers = [
+        ModelContextProtocolServer(name="test-server", url="http://localhost:8080"),
+    ]
+    mock_config = mocker.Mock()
+    mock_config.mcp_servers = mcp_servers
+    mocker.patch("app.endpoints.query.configuration", mock_config)
+    mock_agent_class = mocker.patch(
+        "app.endpoints.query.Agent", return_value=mock_agent
+    )
+
+    query_request = QueryRequest(query="What is OpenStack?")
+    model_id = "fake_model_id"
+    access_token = ""  # Empty token
+
+    response = retrieve_response(mock_client, model_id, query_request, access_token)
+
+    assert response == "LLM answer"
+
+    # Verify Agent was created with MCP server tools and empty bearer header
+    mock_agent_class.assert_called_once()
+    agent_kwargs = mock_agent_class.call_args[1]
+
+    # Check that tools include MCP server names
+    assert "test-server" in agent_kwargs["tools"]
+
+    # Check that extra_headers contains MCP headers with empty authorization
+
+    extra_headers_data = json.loads(
+        agent_kwargs["extra_headers"]["X-LlamaStack-Provider-Data"]
+    )
+    mcp_headers = extra_headers_data["mcp_headers"]
+    assert len(mcp_headers) == 0
+
+
+def test_construct_transcripts_path(setup_configuration, mocker):
+    """Test the construct_transcripts_path function."""
+    # Update configuration for this test
+    setup_configuration.user_data_collection_configuration.transcripts_storage = (
         "/tmp/transcripts"
     )
+    mocker.patch("app.endpoints.query.configuration", setup_configuration)
 
     user_id = "user123"
     conversation_id = "123e4567-e89b-12d3-a456-426614174000"

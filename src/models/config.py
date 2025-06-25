@@ -43,6 +43,14 @@ class ServiceConfiguration(BaseModel):
         return self
 
 
+class ModelContextProtocolServer(BaseModel):
+    """model context protocol server configuration."""
+
+    name: str
+    provider_id: str = "model-context-protocol"
+    url: str
+
+
 class LLamaStackConfiguration(BaseModel):
     """Llama stack configuration."""
 
@@ -101,6 +109,7 @@ class Configuration(BaseModel):
     service: ServiceConfiguration
     llama_stack: LLamaStackConfiguration
     user_data_collection: UserDataCollection
+    mcp_servers: list[ModelContextProtocolServer] = []
 
     def dump(self, filename: str = "configuration.json") -> None:
         """Dump actual configuration into JSON file."""

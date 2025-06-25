@@ -11,6 +11,7 @@ from models.config import (
     ServiceConfiguration,
     UserDataCollection,
     TLSConfiguration,
+    ModelContextProtocolServer,
 )
 
 
@@ -200,6 +201,109 @@ def test_tls_configuration_password_path_to_directory() -> None:
         )
 
 
+def test_model_context_protocol_server_constructor() -> None:
+    """Test the ModelContextProtocolServer constructor."""
+    mcp = ModelContextProtocolServer(name="test-server", url="http://localhost:8080")
+    assert mcp is not None
+    assert mcp.name == "test-server"
+    assert mcp.provider_id == "model-context-protocol"
+    assert mcp.url == "http://localhost:8080"
+
+
+def test_model_context_protocol_server_custom_provider() -> None:
+    """Test the ModelContextProtocolServer constructor with custom provider."""
+    mcp = ModelContextProtocolServer(
+        name="custom-server",
+        provider_id="custom-provider",
+        url="https://api.example.com",
+    )
+    assert mcp is not None
+    assert mcp.name == "custom-server"
+    assert mcp.provider_id == "custom-provider"
+    assert mcp.url == "https://api.example.com"
+
+
+def test_model_context_protocol_server_required_fields() -> None:
+    """Test that ModelContextProtocolServer requires name and url."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ModelContextProtocolServer()
+
+    with pytest.raises(ValidationError):
+        ModelContextProtocolServer(name="test-server")
+
+    with pytest.raises(ValidationError):
+        ModelContextProtocolServer(url="http://localhost:8080")
+
+
+def test_configuration_empty_mcp_servers() -> None:
+    """Test Configuration with empty MCP servers list."""
+    cfg = Configuration(
+        name="test_name",
+        service=ServiceConfiguration(),
+        llama_stack=LLamaStackConfiguration(
+            use_as_library_client=True, library_client_config_path="foo"
+        ),
+        user_data_collection=UserDataCollection(
+            feedback_disabled=True, feedback_storage=None
+        ),
+        mcp_servers=[],
+    )
+    assert cfg is not None
+    assert cfg.mcp_servers == []
+
+
+def test_configuration_single_mcp_server() -> None:
+    """Test Configuration with a single MCP server."""
+    mcp_server = ModelContextProtocolServer(
+        name="test-server", url="http://localhost:8080"
+    )
+    cfg = Configuration(
+        name="test_name",
+        service=ServiceConfiguration(),
+        llama_stack=LLamaStackConfiguration(
+            use_as_library_client=True, library_client_config_path="foo"
+        ),
+        user_data_collection=UserDataCollection(
+            feedback_disabled=True, feedback_storage=None
+        ),
+        mcp_servers=[mcp_server],
+    )
+    assert cfg is not None
+    assert len(cfg.mcp_servers) == 1
+    assert cfg.mcp_servers[0].name == "test-server"
+    assert cfg.mcp_servers[0].url == "http://localhost:8080"
+
+
+def test_configuration_multiple_mcp_servers() -> None:
+    """Test Configuration with multiple MCP servers."""
+    mcp_servers = [
+        ModelContextProtocolServer(name="server1", url="http://localhost:8080"),
+        ModelContextProtocolServer(
+            name="server2", url="http://localhost:8081", provider_id="custom-provider"
+        ),
+        ModelContextProtocolServer(name="server3", url="https://api.example.com"),
+    ]
+    cfg = Configuration(
+        name="test_name",
+        service=ServiceConfiguration(),
+        llama_stack=LLamaStackConfiguration(
+            use_as_library_client=True, library_client_config_path="foo"
+        ),
+        user_data_collection=UserDataCollection(
+            feedback_disabled=True, feedback_storage=None
+        ),
+        mcp_servers=mcp_servers,
+    )
+    assert cfg is not None
+    assert len(cfg.mcp_servers) == 3
+    assert cfg.mcp_servers[0].name == "server1"
+    assert cfg.mcp_servers[1].name == "server2"
+    assert cfg.mcp_servers[1].provider_id == "custom-provider"
+    assert cfg.mcp_servers[2].name == "server3"
+
+
 def test_dump_configuration(tmp_path) -> None:
     """Test the ability to dump configuration."""
     cfg = Configuration(
@@ -211,6 +315,7 @@ def test_dump_configuration(tmp_path) -> None:
         user_data_collection=UserDataCollection(
             feedback_disabled=True, feedback_storage=None
         ),
+        mcp_servers=[],
     )
     assert cfg is not None
     dump_file = tmp_path / "test.json"
@@ -223,3 +328,33 @@ def test_dump_configuration(tmp_path) -> None:
         assert "service" in content
         assert "llama_stack" in content
         assert "user_data_collection" in content
+        assert "mcp_servers" in content
+
+
+def test_dump_configuration_with_mcp_servers(tmp_path) -> None:
+    """Test the ability to dump configuration with MCP servers."""
+    mcp_servers = [
+        ModelContextProtocolServer(name="test-server", url="http://localhost:8080"),
+    ]
+    cfg = Configuration(
+        name="test_name",
+        service=ServiceConfiguration(),
+        llama_stack=LLamaStackConfiguration(
+            use_as_library_client=True, library_client_config_path="foo"
+        ),
+        user_data_collection=UserDataCollection(
+            feedback_disabled=True, feedback_storage=None
+        ),
+        mcp_servers=mcp_servers,
+    )
+    dump_file = tmp_path / "test.json"
+    cfg.dump(dump_file)
+
+    with open(dump_file, "r", encoding="utf-8") as fin:
+        content = json.load(fin)
+        assert content is not None
+        assert "mcp_servers" in content
+        assert len(content["mcp_servers"]) == 1
+        assert content["mcp_servers"][0]["name"] == "test-server"
+        assert content["mcp_servers"][0]["url"] == "http://localhost:8080"
+        assert content["mcp_servers"][0]["provider_id"] == "model-context-protocol"

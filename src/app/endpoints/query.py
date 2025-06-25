@@ -6,13 +6,13 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+from llama_stack_client.lib.agents.agent import Agent
 
-from llama_stack_client.lib.agents.agent import Agent  # type: ignore
 from llama_stack_client import LlamaStackClient  # type: ignore
 from llama_stack_client.types import UserMessage  # type: ignore
 from llama_stack_client.types.model_list_response import ModelListResponse
 
-from fastapi import APIRouter, Request, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends
 
 from client import get_llama_stack_client
 from configuration import configuration
@@ -58,7 +58,6 @@ def retrieve_conversation_id(query_request: QueryRequest) -> str:
 
 @router.post("/query", responses=query_response)
 def query_endpoint_handler(
-    _request: Request,
     query_request: QueryRequest,
     auth: Any = Depends(auth_dependency),
 ) -> QueryResponse:
@@ -68,7 +67,7 @@ def query_endpoint_handler(
     client = get_llama_stack_client(llama_stack_config)
     model_id = select_model_id(client, query_request)
     conversation_id = retrieve_conversation_id(query_request)
-    response = retrieve_response(client, model_id, query_request)
+    response = retrieve_response(client, model_id, query_request, auth)
 
     if not is_transcripts_enabled():
         logger.debug("Transcript collection is disabled in the configuration")
@@ -134,7 +133,10 @@ def select_model_id(client: LlamaStackClient, query_request: QueryRequest) -> st
 
 
 def retrieve_response(
-    client: LlamaStackClient, model_id: str, query_request: QueryRequest
+    client: LlamaStackClient,
+    model_id: str,
+    query_request: QueryRequest,
+    token: str,
 ) -> str:
     """Retrieve response from LLMs and agents."""
     available_shields = [shield.identifier for shield in client.shields.list()]
@@ -156,12 +158,28 @@ def retrieve_response(
     if query_request.attachments:
         validate_attachments_metadata(query_request.attachments)
 
+    # Build mcp_headers config dynamically for all MCP servers
+    # this will allow the agent to pass the user token to the MCP servers
+    mcp_headers = {}
+    if token:
+        for mcp_server in configuration.mcp_servers:
+            mcp_headers[mcp_server.url] = {
+                "Authorization": f"Bearer {token}",
+            }
+    # TODO(lucasagomes): move to ReActAgent
     agent = Agent(
         client,
         model=model_id,
         instructions=system_prompt,
         input_shields=available_shields if available_shields else [],
-        tools=[],
+        tools=[mcp.name for mcp in configuration.mcp_servers],
+        extra_headers={
+            "X-LlamaStack-Provider-Data": json.dumps(
+                {
+                    "mcp_headers": mcp_headers,
+                }
+            ),
+        },
     )
     session_id = agent.create_session("chat_session")
     logger.debug("Session ID: %s", session_id)
@@ -171,7 +189,6 @@ def retrieve_response(
         documents=query_request.get_documents(),
         stream=False,
     )
-
     return str(response.output_message.content)  # type: ignore[union-attr]
 
 

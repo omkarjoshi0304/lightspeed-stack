@@ -49,8 +49,8 @@ source-roots = "src"
 distribution = true
 
 [tool.pdm.scripts]
-start = "pdm run make run"
-test-unit = "pdm run make test-unit"
-test-integration = "pdm run make test-integration"
-verify = "pdm run make verify"
+start = "make run"
+test-unit = "make test-unit"
+test-integration = "make test-integration"
+verify = "make verify"
 

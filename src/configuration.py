@@ -9,6 +9,7 @@ from models.config import (
     LLamaStackConfiguration,
     UserDataCollection,
     ServiceConfiguration,
+    ModelContextProtocolServer,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,14 @@ class AppConfig:
             self._configuration is not None
         ), "logic error: configuration is not loaded"
         return self._configuration.user_data_collection
+
+    @property
+    def mcp_servers(self) -> list[ModelContextProtocolServer]:
+        """Return model context protocol servers configuration."""
+        assert (
+            self._configuration is not None
+        ), "logic error: configuration is not loaded"
+        return self._configuration.mcp_servers
 
 
 configuration: AppConfig = AppConfig()

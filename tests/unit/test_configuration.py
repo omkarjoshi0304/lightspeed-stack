@@ -2,6 +2,7 @@
 
 import pytest
 from configuration import AppConfig
+from models.config import ModelContextProtocolServer
 
 
 def test_default_configuration() -> None:
@@ -47,6 +48,7 @@ def test_init_from_dict() -> None:
         "user_data_collection": {
             "feedback_disabled": True,
         },
+        "mcp_servers": [],
     }
     cfg = AppConfig()
     cfg.init_from_dict(config_dict)
@@ -77,6 +79,50 @@ def test_init_from_dict() -> None:
     assert cfg.user_data_collection_configuration.feedback_disabled is True
 
 
+def test_init_from_dict_with_mcp_servers() -> None:
+    """Test initialization with MCP servers configuration."""
+    config_dict = {
+        "name": "foo",
+        "service": {
+            "host": "localhost",
+            "port": 8080,
+            "auth_enabled": False,
+            "workers": 1,
+            "color_log": True,
+            "access_log": True,
+        },
+        "llama_stack": {
+            "api_key": "xyzzy",
+            "url": "http://x.y.com:1234",
+            "use_as_library_client": False,
+        },
+        "user_data_collection": {
+            "feedback_disabled": True,
+        },
+        "mcp_servers": [
+            {
+                "name": "server1",
+                "url": "http://localhost:8080",
+            },
+            {
+                "name": "server2",
+                "provider_id": "custom-provider",
+                "url": "https://api.example.com",
+            },
+        ],
+    }
+    cfg = AppConfig()
+    cfg.init_from_dict(config_dict)
+
+    assert len(cfg.mcp_servers) == 2
+    assert cfg.mcp_servers[0].name == "server1"
+    assert cfg.mcp_servers[0].provider_id == "model-context-protocol"
+    assert cfg.mcp_servers[0].url == "http://localhost:8080"
+    assert cfg.mcp_servers[1].name == "server2"
+    assert cfg.mcp_servers[1].provider_id == "custom-provider"
+    assert cfg.mcp_servers[1].url == "https://api.example.com"
+
+
 def test_load_proper_configuration(tmpdir) -> None:
     cfg_filename = tmpdir / "config.yaml"
     with open(cfg_filename, "w") as fout:
@@ -96,7 +142,8 @@ llama_stack:
   api_key: xyzzy
 user_data_collection:
   feedback_disabled: true
-        """
+mcp_servers: []
+            """
         )
 
     cfg = AppConfig()
@@ -105,3 +152,157 @@ user_data_collection:
     assert cfg.llama_stack_configuration is not None
     assert cfg.service_configuration is not None
     assert cfg.user_data_collection_configuration is not None
+
+
+def test_load_configuration_with_mcp_servers(tmpdir) -> None:
+    """Test loading configuration from YAML file with MCP servers."""
+    cfg_filename = tmpdir / "config.yaml"
+    with open(cfg_filename, "w") as fout:
+        fout.write(
+            """
+name: test service
+service:
+  host: localhost
+  port: 8080
+  auth_enabled: false
+  workers: 1
+  color_log: true
+  access_log: true
+llama_stack:
+  use_as_library_client: false
+  url: http://localhost:8321
+  api_key: test-key
+user_data_collection:
+  feedback_disabled: true
+mcp_servers:
+  - name: filesystem-server
+    url: http://localhost:3000
+  - name: git-server
+    provider_id: custom-git-provider
+    url: https://git.example.com/mcp
+            """
+        )
+
+    cfg = AppConfig()
+    cfg.load_configuration(cfg_filename)
+
+    assert len(cfg.mcp_servers) == 2
+    assert cfg.mcp_servers[0].name == "filesystem-server"
+    assert cfg.mcp_servers[0].provider_id == "model-context-protocol"
+    assert cfg.mcp_servers[0].url == "http://localhost:3000"
+    assert cfg.mcp_servers[1].name == "git-server"
+    assert cfg.mcp_servers[1].provider_id == "custom-git-provider"
+    assert cfg.mcp_servers[1].url == "https://git.example.com/mcp"
+
+
+def test_mcp_servers_property_empty() -> None:
+    """Test mcp_servers property returns empty list when no servers configured."""
+    config_dict = {
+        "name": "test",
+        "service": {
+            "host": "localhost",
+            "port": 8080,
+            "auth_enabled": False,
+            "workers": 1,
+            "color_log": True,
+            "access_log": True,
+        },
+        "llama_stack": {
+            "api_key": "test-key",
+            "url": "http://localhost:8321",
+            "use_as_library_client": False,
+        },
+        "user_data_collection": {
+            "feedback_disabled": True,
+        },
+        "mcp_servers": [],
+    }
+    cfg = AppConfig()
+    cfg.init_from_dict(config_dict)
+
+    servers = cfg.mcp_servers
+    assert isinstance(servers, list)
+    assert len(servers) == 0
+
+
+def test_mcp_servers_property_with_servers() -> None:
+    """Test mcp_servers property returns correct list of ModelContextProtocolServer objects."""
+    config_dict = {
+        "name": "test",
+        "service": {
+            "host": "localhost",
+            "port": 8080,
+            "auth_enabled": False,
+            "workers": 1,
+            "color_log": True,
+            "access_log": True,
+        },
+        "llama_stack": {
+            "api_key": "test-key",
+            "url": "http://localhost:8321",
+            "use_as_library_client": False,
+        },
+        "user_data_collection": {
+            "feedback_disabled": True,
+        },
+        "mcp_servers": [
+            {
+                "name": "test-server",
+                "url": "http://localhost:8080",
+            },
+        ],
+    }
+    cfg = AppConfig()
+    cfg.init_from_dict(config_dict)
+
+    servers = cfg.mcp_servers
+    assert isinstance(servers, list)
+    assert len(servers) == 1
+    assert isinstance(servers[0], ModelContextProtocolServer)
+    assert servers[0].name == "test-server"
+    assert servers[0].url == "http://localhost:8080"
+
+
+def test_configuration_not_loaded():
+    """Test that accessing configuration before loading raises an error."""
+    cfg = AppConfig()
+    with pytest.raises(
+        AssertionError, match="logic error: configuration is not loaded"
+    ):
+        cfg.configuration
+
+
+def test_service_configuration_not_loaded():
+    """Test that accessing service_configuration before loading raises an error."""
+    cfg = AppConfig()
+    with pytest.raises(
+        AssertionError, match="logic error: configuration is not loaded"
+    ):
+        cfg.service_configuration
+
+
+def test_llama_stack_configuration_not_loaded():
+    """Test that accessing llama_stack_configuration before loading raises an error."""
+    cfg = AppConfig()
+    with pytest.raises(
+        AssertionError, match="logic error: configuration is not loaded"
+    ):
+        cfg.llama_stack_configuration
+
+
+def test_user_data_collection_configuration_not_loaded():
+    """Test that accessing user_data_collection_configuration before loading raises an error."""
+    cfg = AppConfig()
+    with pytest.raises(
+        AssertionError, match="logic error: configuration is not loaded"
+    ):
+        cfg.user_data_collection_configuration
+
+
+def test_mcp_servers_not_loaded():
+    """Test that accessing mcp_servers before loading raises an error."""
+    cfg = AppConfig()
+    with pytest.raises(
+        AssertionError, match="logic error: configuration is not loaded"
+    ):
+        cfg.mcp_servers
