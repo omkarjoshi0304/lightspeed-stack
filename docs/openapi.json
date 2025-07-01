@@ -227,10 +227,48 @@
                             }
                         },
                         "name": "foo bar baz",
+                        "service": {
+                            "host": "localhost",
+                            "port": 8080,
+                            "auth_enabled": false,
+                            "workers": 1,
+                            "color_log": true,
+                            "access_log": true,
+                            "tls_config": {
+                                "tls_certificate_path": "config/certificate.crt",
+                                "tls_key_path": "config/private.key"
+                            }
+                        },
                         "llama_stack": {
                             "url": "http://localhost:8321",
-                            "api_key": "xyzzy"
-                        }
+                            "api_key": "xyzzy",
+                            "use_as_library_client": false
+                        },
+                        "user_data_collection": {
+                            "feedback_disabled": false,
+                            "feedback_storage": "/tmp/data/feedback",
+                            "transcripts_disabled": true
+                        },
+                        "mcp_servers": [
+                            {
+                                "name": "server1",
+                                "provider_id": "provider1",
+                                "url": "http://url.com:1"
+                            },
+                            {
+                                "name": "server2",
+                                "provider_id": "provider2",
+                                "url": "http://url.com:2"
+                            },
+                            {
+                                "name": "server3",
+                                "provider_id": "provider3",
+                                "url": "http://url.com:3"
+                            }
+                        ]
+                    },
+                    "503": {
+                        "description": "Configuration can not be loaded"
                     }
                 }
             }
@@ -293,6 +331,46 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/StatusResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/streaming_query": {
+            "post": {
+                "tags": [
+                    "streaming_query"
+                ],
+                "summary": "Streaming Query Endpoint Handler",
+                "description": "Handle request to the /streaming_query endpoint.",
+                "operationId": "streaming_query_endpoint_handler_v1_streaming_query_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QueryRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
                                 }
                             }
                         }
