@@ -2,6 +2,7 @@
 set namespaceSeparator none
 class "Configuration" as src.models.config.Configuration {
   llama_stack
+  mcp_servers : list[ModelContextProtocolServer]
   name : str
   service
   user_data_collection
@@ -14,21 +15,36 @@ class "LLamaStackConfiguration" as src.models.config.LLamaStackConfiguration {
   use_as_library_client : Optional[bool]
   check_llama_stack_model() -> Self
 }
+class "ModelContextProtocolServer" as src.models.config.ModelContextProtocolServer {
+  name : str
+  provider_id : str
+  url : str
+}
 class "ServiceConfiguration" as src.models.config.ServiceConfiguration {
   access_log : bool
   auth_enabled : bool
   color_log : bool
   host : str
   port : int
+  tls_config
   workers : int
   check_service_configuration() -> Self
+}
+class "TLSConfiguration" as src.models.config.TLSConfiguration {
+  tls_certificate_path : Optional[FilePath]
+  tls_key_password : Optional[FilePath]
+  tls_key_path : Optional[FilePath]
+  check_tls_configuration() -> Self
 }
 class "UserDataCollection" as src.models.config.UserDataCollection {
   feedback_disabled : bool
   feedback_storage : Optional[str]
+  transcripts_disabled : bool
+  transcripts_storage : Optional[str]
   check_storage_location_is_set_when_needed() -> Self
 }
 src.models.config.LLamaStackConfiguration --* src.models.config.Configuration : llama_stack
 src.models.config.ServiceConfiguration --* src.models.config.Configuration : service
+src.models.config.TLSConfiguration --* src.models.config.ServiceConfiguration : tls_config
 src.models.config.UserDataCollection --* src.models.config.Configuration : user_data_collection
 @enduml

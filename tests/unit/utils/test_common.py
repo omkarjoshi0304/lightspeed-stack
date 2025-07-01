@@ -1,9 +1,13 @@
 """Test module for utils/common.py."""
 
-from unittest.mock import Mock
+import pytest
+from unittest.mock import Mock, AsyncMock
 from logging import Logger
 
-from utils.common import retrieve_user_id, register_mcp_servers
+from utils.common import (
+    retrieve_user_id,
+    register_mcp_servers_async,
+)
 from models.config import (
     Configuration,
     ServiceConfiguration,
@@ -20,37 +24,38 @@ def test_retrieve_user_id():
     assert user_id == "user_id_placeholder"
 
 
-def test_register_mcp_servers_empty_list(mocker):
+@pytest.mark.asyncio
+async def test_register_mcp_servers_empty_list(mocker):
     """Test register_mcp_servers with empty MCP servers list."""
     # Mock the logger
     mock_logger = Mock(spec=Logger)
 
-    # Mock the LlamaStack client
-    mock_client = Mock()
-    mock_client.tools.list.return_value = []
-    mocker.patch("utils.common.get_llama_stack_client", return_value=mock_client)
+    # Mock the LlamaStack client (shouldn't be called since no MCP servers)
+    mock_get_client = mocker.patch("utils.common.get_llama_stack_client")
 
     # Create configuration with empty MCP servers
     config = Configuration(
         name="test",
         service=ServiceConfiguration(),
         llama_stack=LLamaStackConfiguration(
-            use_as_library_client=True, library_client_config_path="foo"
+            use_as_library_client=False, url="http://localhost:8321"
         ),
         user_data_collection=UserDataCollection(feedback_disabled=True),
         mcp_servers=[],
     )
-
     # Call the function
-    register_mcp_servers(mock_logger, config)
+    await register_mcp_servers_async(mock_logger, config)
 
-    # Verify client.tools.list was called
-    mock_client.tools.list.assert_called_once()
-    # Verify client.toolgroups.register was not called since no MCP servers
-    assert not mock_client.toolgroups.register.called
+    # Verify get_llama_stack_client was NOT called since no MCP servers
+    mock_get_client.assert_not_called()
+    # Verify debug message was logged
+    mock_logger.debug.assert_called_with(
+        "No MCP servers configured, skipping registration"
+    )
 
 
-def test_register_mcp_servers_single_server_not_registered(mocker):
+@pytest.mark.asyncio
+async def test_register_mcp_servers_single_server_not_registered(mocker):
     """Test register_mcp_servers with single MCP server that is not yet registered."""
     # Mock the logger
     mock_logger = Mock(spec=Logger)
@@ -71,14 +76,14 @@ def test_register_mcp_servers_single_server_not_registered(mocker):
         name="test",
         service=ServiceConfiguration(),
         llama_stack=LLamaStackConfiguration(
-            use_as_library_client=True, library_client_config_path="foo"
+            use_as_library_client=False, url="http://localhost:8321"
         ),
         user_data_collection=UserDataCollection(feedback_disabled=True),
         mcp_servers=[mcp_server],
     )
 
     # Call the function
-    register_mcp_servers(mock_logger, config)
+    await register_mcp_servers_async(mock_logger, config)
 
     # Verify client.tools.list was called
     mock_client.tools.list.assert_called_once()
@@ -92,7 +97,8 @@ def test_register_mcp_servers_single_server_not_registered(mocker):
     mock_logger.debug.assert_called()
 
 
-def test_register_mcp_servers_single_server_already_registered(mocker):
+@pytest.mark.asyncio
+async def test_register_mcp_servers_single_server_already_registered(mocker):
     """Test register_mcp_servers with single MCP server that is already registered."""
     # Mock the logger
     mock_logger = Mock(spec=Logger)
@@ -112,14 +118,14 @@ def test_register_mcp_servers_single_server_already_registered(mocker):
         name="test",
         service=ServiceConfiguration(),
         llama_stack=LLamaStackConfiguration(
-            use_as_library_client=True, library_client_config_path="foo"
+            use_as_library_client=False, url="http://localhost:8321"
         ),
         user_data_collection=UserDataCollection(feedback_disabled=True),
         mcp_servers=[mcp_server],
     )
 
     # Call the function
-    register_mcp_servers(mock_logger, config)
+    await register_mcp_servers_async(mock_logger, config)
 
     # Verify client.tools.list was called
     mock_client.tools.list.assert_called_once()
@@ -127,7 +133,8 @@ def test_register_mcp_servers_single_server_already_registered(mocker):
     assert not mock_client.toolgroups.register.called
 
 
-def test_register_mcp_servers_multiple_servers_mixed_registration(mocker):
+@pytest.mark.asyncio
+async def test_register_mcp_servers_multiple_servers_mixed_registration(mocker):
     """Test register_mcp_servers with multiple MCP servers - some registered, some not."""
     # Mock the logger
     mock_logger = Mock(spec=Logger)
@@ -156,14 +163,14 @@ def test_register_mcp_servers_multiple_servers_mixed_registration(mocker):
         name="test",
         service=ServiceConfiguration(),
         llama_stack=LLamaStackConfiguration(
-            use_as_library_client=True, library_client_config_path="foo"
+            use_as_library_client=False, url="http://localhost:8321"
         ),
         user_data_collection=UserDataCollection(feedback_disabled=True),
         mcp_servers=mcp_servers,
     )
 
     # Call the function
-    register_mcp_servers(mock_logger, config)
+    await register_mcp_servers_async(mock_logger, config)
 
     # Verify client.tools.list was called
     mock_client.tools.list.assert_called_once()
@@ -186,7 +193,8 @@ def test_register_mcp_servers_multiple_servers_mixed_registration(mocker):
     mock_client.toolgroups.register.assert_has_calls(expected_calls, any_order=True)
 
 
-def test_register_mcp_servers_with_custom_provider(mocker):
+@pytest.mark.asyncio
+async def test_register_mcp_servers_with_custom_provider(mocker):
     """Test register_mcp_servers with MCP server using custom provider."""
     # Mock the logger
     mock_logger = Mock(spec=Logger)
@@ -207,18 +215,70 @@ def test_register_mcp_servers_with_custom_provider(mocker):
         name="test",
         service=ServiceConfiguration(),
         llama_stack=LLamaStackConfiguration(
-            use_as_library_client=True, library_client_config_path="foo"
+            use_as_library_client=False, url="http://localhost:8321"
         ),
         user_data_collection=UserDataCollection(feedback_disabled=True),
         mcp_servers=[mcp_server],
     )
 
     # Call the function
-    register_mcp_servers(mock_logger, config)
+    await register_mcp_servers_async(mock_logger, config)
 
     # Verify client.toolgroups.register was called with custom provider
     mock_client.toolgroups.register.assert_called_once_with(
         toolgroup_id="custom-server",
         provider_id="my-custom-provider",
         mcp_endpoint={"uri": "https://custom.example.com/mcp"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_register_mcp_servers_async_with_library_client(mocker):
+    """Test register_mcp_servers_async with library client configuration."""
+    # Mock the logger
+    mock_logger = Mock(spec=Logger)
+
+    # Mock the LlamaStackAsLibraryClient
+    mock_library_client = Mock()
+    mock_async_client = AsyncMock()
+    mock_async_client.initialize = AsyncMock()
+    mock_library_client.async_client = mock_async_client
+
+    # Mock tools.list to return empty list
+    mock_tool = Mock()
+    mock_tool.toolgroup_id = "existing-tool"
+    mock_async_client.tools.list = AsyncMock(return_value=[mock_tool])
+    mock_async_client.toolgroups.register = AsyncMock()
+
+    mocker.patch(
+        "utils.common.LlamaStackAsLibraryClient", return_value=mock_library_client
+    )
+
+    # Create configuration with library client enabled
+    mcp_server = ModelContextProtocolServer(
+        name="test-server", url="http://localhost:8080"
+    )
+    config = Configuration(
+        name="test",
+        service=ServiceConfiguration(),
+        llama_stack=LLamaStackConfiguration(
+            use_as_library_client=True,
+            library_client_config_path="/path/to/config.yaml",
+        ),
+        user_data_collection=UserDataCollection(feedback_disabled=True),
+        mcp_servers=[mcp_server],
+    )
+
+    # Call the async function
+    await register_mcp_servers_async(mock_logger, config)
+
+    # Verify initialization was called
+    mock_async_client.initialize.assert_called_once()
+    # Verify tools.list was called
+    mock_async_client.tools.list.assert_called_once()
+    # Verify toolgroups.register was called for the new server
+    mock_async_client.toolgroups.register.assert_called_once_with(
+        toolgroup_id="test-server",
+        provider_id="model-context-protocol",
+        mcp_endpoint={"uri": "http://localhost:8080"},
     )

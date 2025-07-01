@@ -12,20 +12,20 @@ jobs:
       pull-requests: read
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Python version
-        run: python --version
-      - name: PDM installation
-        run: pip install --user pdm
+        run: uv run python --version
+      - name: uv version
+        run: uv --version
       - name: Install dependencies
-        run: pdm install
-      - name: Install devel dependencies
-        run: pdm install --dev
+        run: uv pip install --python ${{ matrix.python-version }} -e .
+      - name: Install pdm  # Required for dynamic version test
+        run: uv pip install pdm
       - name: Run unit tests
-        run: pdm run python -m pytest tests/unit --cov=src --cov=runner --cov-report term-missing
+        run: uv run pytest tests/unit --cov=src --cov=runner --cov-report term-missing

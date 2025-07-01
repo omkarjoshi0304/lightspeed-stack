@@ -78,21 +78,47 @@ class InfoResponse(BaseModel):
     }
 
 
-class ReadinessResponse(BaseModel):
-    """Model representing a response to a readiness request.
+class ProviderHealthStatus(BaseModel):
+    """Model representing the health status of a provider.
 
     Attributes:
-        ready: The readiness of the service.
+        provider_id: The ID of the provider.
+        status: The health status ('ok', 'unhealthy', 'not_implemented').
+        message: Optional message about the health status.
+    """
+
+    provider_id: str
+    status: str
+    message: Optional[str] = None
+
+
+class ReadinessResponse(BaseModel):
+    """Model representing response to a readiness request.
+
+    Attributes:
+        ready: If service is ready.
         reason: The reason for the readiness.
+        providers: List of unhealthy providers in case of readiness failure.
 
     Example:
         ```python
-        readiness_response = ReadinessResponse(ready=True, reason="service is ready")
+        readiness_response = ReadinessResponse(
+            ready=False,
+            reason="Service is not ready",
+            providers=[
+                ProviderHealthStatus(
+                    provider_id="ollama",
+                    status="Error",
+                    message="Server is unavailable"
+                )
+            ]
+        )
         ```
     """
 
     ready: bool
     reason: str
+    providers: list[ProviderHealthStatus]
 
     # provides examples for /docs endpoint
     model_config = {
@@ -100,7 +126,8 @@ class ReadinessResponse(BaseModel):
             "examples": [
                 {
                     "ready": True,
-                    "reason": "service is ready",
+                    "reason": "Service is ready",
+                    "providers": [],
                 }
             ]
         }

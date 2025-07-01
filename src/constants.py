@@ -20,4 +20,6 @@ ATTACHMENT_CONTENT_TYPES = frozenset(
     {"text/plain", "application/json", "application/yaml", "application/xml"}
 )
 
+# Default system prompt used only when no other system prompt is specified in
+# configuration file nor in the query request
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant"

@@ -37,10 +37,10 @@
 ## Prerequisities
 
 - git
-- Python 3.11, 3.12, or 3.13
+- Python 3.12 or 3.13
 - pip
 
-The development requires at least [Python 3.11](https://docs.python.org/3/whatsnew/3.11.html) due to significant improvement on performance, optimizations which benefit modern ML, AI, LLM, NL stacks, and improved asynchronous processing capabilities. It is also possible to use Python 3.12 or Python 3.13.
+The development requires at least [Python 3.12](https://docs.python.org/3/whatsnew/3.12.html) due to significant improvement on performance, optimizations which benefit modern ML, AI, LLM, NL stacks, and improved asynchronous processing capabilities. It is also possible to use Python 3.13.
 
 
 

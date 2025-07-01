@@ -150,7 +150,7 @@
                     "health"
                 ],
                 "summary": "Readiness Probe Get Method",
-                "description": "Ready status of service.",
+                "description": "Ready status of service with provider health details.",
                 "operationId": "readiness_probe_get_method_v1_readiness_get",
                 "responses": {
                     "200": {
@@ -168,7 +168,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/NotAvailableResponse"
+                                    "$ref": "#/components/schemas/ReadinessResponse"
                                 }
                             }
                         }
@@ -358,6 +358,14 @@
                     },
                     "user_data_collection": {
                         "$ref": "#/components/schemas/UserDataCollection"
+                    },
+                    "mcp_servers": {
+                        "items": {
+                            "$ref": "#/components/schemas/ModelContextProtocolServer"
+                        },
+                        "type": "array",
+                        "title": "Mcp Servers",
+                        "default": []
                     }
                 },
                 "type": "object",
@@ -557,6 +565,30 @@
                     }
                 ]
             },
+            "ModelContextProtocolServer": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "provider_id": {
+                        "type": "string",
+                        "title": "Provider Id",
+                        "default": "model-context-protocol"
+                    },
+                    "url": {
+                        "type": "string",
+                        "title": "Url"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "url"
+                ],
+                "title": "ModelContextProtocolServer",
+                "description": "model context protocol server configuration."
+            },
             "ModelsResponse": {
                 "properties": {
                     "models": {
@@ -575,36 +607,35 @@
                 "title": "ModelsResponse",
                 "description": "Model representing a response to models request."
             },
-            "NotAvailableResponse": {
+            "ProviderHealthStatus": {
                 "properties": {
-                    "detail": {
-                        "additionalProperties": {
-                            "type": "string"
-                        },
-                        "type": "object",
-                        "title": "Detail"
+                    "provider_id": {
+                        "type": "string",
+                        "title": "Provider Id"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "message": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Message"
                     }
                 },
                 "type": "object",
                 "required": [
-                    "detail"
+                    "provider_id",
+                    "status"
                 ],
-                "title": "NotAvailableResponse",
-                "description": "Model representing error response for readiness endpoint.",
-                "examples": [
-                    {
-                        "detail": {
-                            "cause": "Index is not ready",
-                            "response": "Service is not ready"
-                        }
-                    },
-                    {
-                        "detail": {
-                            "cause": "LLM is not ready",
-                            "response": "Service is not ready"
-                        }
-                    }
-                ]
+                "title": "ProviderHealthStatus",
+                "description": "Model representing the health status of a provider.\n\nAttributes:\n    provider_id: The ID of the provider.\n    status: The health status ('ok', 'unhealthy', 'not_implemented').\n    message: Optional message about the health status."
             },
             "QueryRequest": {
                 "properties": {
@@ -745,19 +776,28 @@
                     "reason": {
                         "type": "string",
                         "title": "Reason"
+                    },
+                    "providers": {
+                        "items": {
+                            "$ref": "#/components/schemas/ProviderHealthStatus"
+                        },
+                        "type": "array",
+                        "title": "Providers"
                     }
                 },
                 "type": "object",
                 "required": [
                     "ready",
-                    "reason"
+                    "reason",
+                    "providers"
                 ],
                 "title": "ReadinessResponse",
-                "description": "Model representing a response to a readiness request.\n\nAttributes:\n    ready: The readiness of the service.\n    reason: The reason for the readiness.\n\nExample:\n    ```python\n    readiness_response = ReadinessResponse(ready=True, reason=\"service is ready\")\n    ```",
+                "description": "Model representing response to a readiness request.\n\nAttributes:\n    ready: If service is ready.\n    reason: The reason for the readiness.\n    providers: List of unhealthy providers in case of readiness failure.\n\nExample:\n    ```python\n    readiness_response = ReadinessResponse(\n        ready=False,\n        reason=\"Service is not ready\",\n        providers=[\n            ProviderHealthStatus(\n                provider_id=\"ollama\",\n                status=\"Error\",\n                message=\"Server is unavailable\"\n            )\n        ]\n    )\n    ```",
                 "examples": [
                     {
+                        "providers": [],
                         "ready": true,
-                        "reason": "service is ready"
+                        "reason": "Service is ready"
                     }
                 ]
             },
@@ -792,6 +832,10 @@
                         "type": "boolean",
                         "title": "Access Log",
                         "default": true
+                    },
+                    "tls_config": {
+                        "$ref": "#/components/schemas/TLSConfiguration",
+                        "default": {}
                     }
                 },
                 "type": "object",
@@ -826,6 +870,49 @@
                     }
                 ]
             },
+            "TLSConfiguration": {
+                "properties": {
+                    "tls_certificate_path": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "file-path"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tls Certificate Path"
+                    },
+                    "tls_key_path": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "file-path"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tls Key Path"
+                    },
+                    "tls_key_password": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "file-path"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tls Key Password"
+                    }
+                },
+                "type": "object",
+                "title": "TLSConfiguration",
+                "description": "TLS configuration."
+            },
             "UserDataCollection": {
                 "properties": {
                     "feedback_disabled": {
@@ -843,6 +930,22 @@
                             }
                         ],
                         "title": "Feedback Storage"
+                    },
+                    "transcripts_disabled": {
+                        "type": "boolean",
+                        "title": "Transcripts Disabled",
+                        "default": true
+                    },
+                    "transcripts_storage": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Transcripts Storage"
                     }
                 },
                 "type": "object",

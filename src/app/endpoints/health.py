@@ -8,13 +8,55 @@ methods. For HEAD HTTP method, just the HTTP response code is used.
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from llama_stack.providers.datatypes import HealthStatus
 
-from models.responses import ReadinessResponse, LivenessResponse, NotAvailableResponse
-
+from fastapi import APIRouter, status, Response
+from client import get_llama_stack_client
+from configuration import configuration
+from models.responses import (
+    LivenessResponse,
+    ReadinessResponse,
+    ProviderHealthStatus,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
+
+
+def get_providers_health_statuses() -> list[ProviderHealthStatus]:
+    """Check health of all providers.
+
+    Returns:
+        List of provider health statuses.
+    """
+    try:
+        llama_stack_config = configuration.llama_stack_configuration
+
+        client = get_llama_stack_client(llama_stack_config)
+
+        providers = client.providers.list()
+        logger.debug("Found %d providers", len(providers))
+
+        health_results = [
+            ProviderHealthStatus(
+                provider_id=provider.provider_id,
+                status=str(provider.health.get("status", "unknown")),
+                message=str(provider.health.get("message", "")),
+            )
+            for provider in providers
+        ]
+        return health_results
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        # eg. no providers defined
+        logger.error("Failed to check providers health: %s", e)
+        return [
+            ProviderHealthStatus(
+                provider_id="unknown",
+                status=HealthStatus.ERROR.value,
+                message=f"Failed to initialize health check: {str(e)}",
+            )
+        ]
 
 
 get_readiness_responses: dict[int | str, dict[str, Any]] = {
@@ -24,15 +66,31 @@ get_readiness_responses: dict[int | str, dict[str, Any]] = {
     },
     503: {
         "description": "Service is not ready",
-        "model": NotAvailableResponse,
+        "model": ReadinessResponse,
     },
 }
 
 
 @router.get("/readiness", responses=get_readiness_responses)
-def readiness_probe_get_method() -> ReadinessResponse:
-    """Ready status of service."""
-    return ReadinessResponse(ready=True, reason="service is ready")
+def readiness_probe_get_method(response: Response) -> ReadinessResponse:
+    """Ready status of service with provider health details."""
+    provider_statuses = get_providers_health_statuses()
+
+    # Check if any provider is unhealthy (not counting not_implemented as unhealthy)
+    unhealthy_providers = [
+        p for p in provider_statuses if p.status == HealthStatus.ERROR.value
+    ]
+
+    if unhealthy_providers:
+        ready = False
+        unhealthy_provider_names = [p.provider_id for p in unhealthy_providers]
+        reason = f"Providers not healthy: {', '.join(unhealthy_provider_names)}"
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    else:
+        ready = True
+        reason = "All providers are healthy"
+
+    return ReadinessResponse(ready=ready, reason=reason, providers=unhealthy_providers)
 
 
 get_liveness_responses: dict[int | str, dict[str, Any]] = {

@@ -4,7 +4,7 @@
 
 - brew
 - git
-- Python 3.11 or 3.12
+- Python 3.12 or 3.13
 - pip
 
 ## Installation steps

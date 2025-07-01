@@ -1,8 +1,7 @@
 """Unit tests for runners."""
 
+from pathlib import Path
 from unittest.mock import patch
-
-from pydantic import FilePath
 
 
 from models.config import ServiceConfiguration, TLSConfiguration
@@ -78,9 +77,9 @@ def test_start_uvicorn_empty_tls_configuration() -> None:
 def test_start_uvicorn_tls_configuration() -> None:
     """Test the function to start Uvicorn server using custom TLS configuration."""
     tls_config = TLSConfiguration(
-        tls_certificate_path="tests/configuration/server.crt",
-        tls_key_path="tests/configuration/server.key",
-        tls_key_password="tests/configuration/password",
+        tls_certificate_path=Path("tests/configuration/server.crt"),
+        tls_key_path=Path("tests/configuration/server.key"),
+        tls_key_password=Path("tests/configuration/password"),
     )
     configuration = ServiceConfiguration(
         host="x.y.com", port=1234, workers=10, tls_config=tls_config
@@ -95,8 +94,8 @@ def test_start_uvicorn_tls_configuration() -> None:
             port=1234,
             workers=10,
             log_level=20,
-            ssl_certfile=FilePath("tests/configuration/server.crt"),
-            ssl_keyfile=FilePath("tests/configuration/server.key"),
+            ssl_certfile=Path("tests/configuration/server.crt"),
+            ssl_keyfile=Path("tests/configuration/server.key"),
             ssl_keyfile_password="tests/configuration/password",
             use_colors=True,
             access_log=True,

@@ -50,6 +50,7 @@ class TestQueryRequest:
             query="Tell me about Kubernetes",
             attachments=attachments,
         )
+        assert qr.attachments is not None
         assert len(qr.attachments) == 2
         assert qr.attachments[0].attachment_type == "log"
         assert qr.attachments[0].content_type == "text/plain"
@@ -108,6 +109,7 @@ class TestQueryRequest:
             provider="OpenAI",
             model="gpt-3.5-turbo",
         )
+        assert qr is not None
         validated_qr = qr.validate_provider_and_model()
         assert validated_qr.provider == "OpenAI"
         assert validated_qr.model == "gpt-3.5-turbo"

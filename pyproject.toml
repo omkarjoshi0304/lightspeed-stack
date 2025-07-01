@@ -1,17 +1,24 @@
 [project]
 name = "lightspeed-stack"
-version = "0.0.1"
+dynamic = ["version"]
 description = "LLM tooling stack"
 authors = []
-requires-python = ">=3.11.1,<=3.12.10"
+requires-python = ">=3.12,<3.14"
 readme = "README.md"
 license = {file = "LICENSE"}
 dependencies = [
     "fastapi>=0.115.6",
     "uvicorn>=0.34.3",
-    "llama-stack>=0.2.9",
+    "llama-stack>=0.2.13",
     "rich>=14.0.0",
 ]
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.version]
+source = "file"
+path = "src/version.py"
 
 [project.urls]
 Homepage = "https://github.com/lightspeed-core/lightspeed-stack"
@@ -31,6 +38,7 @@ dev = [
     "types-PyYAML>=6.0.2",
     "ruff>=0.11.13",
     "aiosqlite",
+    "behave>=1.2.6",
 ]
 
 [tool.pytest.ini_options]
@@ -45,12 +53,6 @@ addopts = [
 [tool.pylint.main]
 source-roots = "src"
 
-[tool.pdm]
-distribution = true
-
-[tool.pdm.scripts]
-start = "make run"
-test-unit = "make test-unit"
-test-integration = "make test-integration"
-verify = "make verify"
-
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

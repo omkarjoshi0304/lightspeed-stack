@@ -3,6 +3,8 @@
 import pytest
 from configuration import configuration
 
+from models.config import ModelContextProtocolServer
+
 
 @pytest.fixture
 def configuration_filename() -> str:
@@ -31,6 +33,7 @@ def test_loading_proper_configuration(configuration_filename: str) -> None:
     assert cfg.llama_stack_configuration is not None
     assert cfg.service_configuration is not None
     assert cfg.user_data_collection_configuration is not None
+    assert cfg.mcp_servers is not None
 
     # check 'configuration' section
     name = cfg.configuration.name
@@ -54,3 +57,17 @@ def test_loading_proper_configuration(configuration_filename: str) -> None:
     udc_config = cfg.user_data_collection_configuration
     assert udc_config.feedback_disabled is False
     assert udc_config.feedback_storage == "/tmp/data/feedback"
+
+    # check MCP servers section
+    mcp_servers = cfg.mcp_servers
+    assert mcp_servers != []
+    assert len(mcp_servers) == 3
+    assert mcp_servers[0] == ModelContextProtocolServer(
+        name="server1", provider_id="provider1", url="http://url.com:1"
+    )
+    assert mcp_servers[1] == ModelContextProtocolServer(
+        name="server2", provider_id="provider2", url="http://url.com:2"
+    )
+    assert mcp_servers[2] == ModelContextProtocolServer(
+        name="server3", provider_id="provider3", url="http://url.com:3"
+    )

@@ -18,6 +18,10 @@ def request_endpoint_with_body(
     context: Context, endpoint: str, hostname: str, port: int, body: str
 ) -> None:
     """Perform a request to the local server with a given body in the request."""
+    # initial value
+    context.response = None
+
+    # perform REST API call
     context.response = requests.get(
         f"http://{hostname}:{port}/{endpoint}",
         data=body,
@@ -30,6 +34,10 @@ def request_endpoint_with_json(
     context: Context, endpoint: str, hostname: str, port: int
 ) -> None:
     """Perform a request to the local server with a given JSON in the request."""
+    # initial value
+    context.response = None
+
+    # perform REST API call
     context.response = requests.get(
         f"http://{hostname}:{port}/{endpoint}",
         json=json.loads(context.text),
@@ -51,6 +59,10 @@ def request_endpoint_with_url_params(
         value = row["value"]
         params[name] = value
 
+    # initial value
+    context.response = None
+
+    # perform REST API call
     context.response = requests.get(
         f"http://{hostname}:{port}/{endpoint}",
         params=params,
@@ -63,6 +75,10 @@ def request_endpoint_with_url_path(
     context: Context, endpoint: str, hostname: str, port: int, path: str
 ) -> None:
     """Perform a request to the server defined by URL to a given endpoint."""
+    # initial value
+    context.response = None
+
+    # perform REST API call
     context.response = requests.get(
         f"http://{hostname}:{port}/{endpoint}/{path}",
         timeout=DEFAULT_TIMEOUT,
@@ -72,6 +88,10 @@ def request_endpoint_with_url_path(
 @when("I request the {endpoint} endpoint in {hostname:w}:{port:d}")
 def request_endpoint(context: Context, endpoint: str, hostname: str, port: int) -> None:
     """Perform a request to the local server to the given endpoint."""
+    # initial value
+    context.response = None
+
+    # perform REST API call
     context.response = requests.get(
         f"http://{hostname}:{port}/{endpoint}", timeout=DEFAULT_TIMEOUT
     )
@@ -80,14 +100,26 @@ def request_endpoint(context: Context, endpoint: str, hostname: str, port: int) 
 @then("The status code of the response is {status:d}")
 def check_status_code(context: Context, status: int) -> None:
     """Check the HTTP status code for latest response from tested service."""
+    assert context.response is not None, "Request needs to be performed first"
     assert (
         context.response.status_code == status
     ), f"Status code is {context.response.status_code}"
 
 
+@then('Content type of response should be set to "{content_type}"')
+def check_content_type(context: Context, content_type: str) -> None:
+    """Check the HTTP content type for latest response from tested service."""
+    assert context.response is not None, "Request needs to be performed first"
+    headers = context.response.headers
+    assert "content-type" in headers, "Content type is not specified"
+    actual = headers["content-type"]
+    assert actual.startswith(content_type), f"Improper content type {actual}"
+
+
 @then("The body of the response has the following schema")
 def check_response_body_schema(context: Context) -> None:
     """Check that response body is compliant with a given schema."""
+    assert context.response is not None, "Request needs to be performed first"
     schema = json.loads(context.text)
     body = context.response.json()
 
@@ -97,6 +129,7 @@ def check_response_body_schema(context: Context) -> None:
 @then("The body of the response contains {substring}")
 def check_response_body_contains(context: Context, substring: str) -> None:
     """Check that response body contains a substring."""
+    assert context.response is not None, "Request needs to be performed first"
     assert (
         substring in context.response.text
     ), f"The response text '{context.response.text}' doesn't contain '{substring}'"
@@ -105,6 +138,7 @@ def check_response_body_contains(context: Context, substring: str) -> None:
 @then("The body of the response is the following")
 def check_prediction_result(context: Context) -> None:
     """Check the content of the response to be exactly the same."""
+    assert context.response is not None, "Request needs to be performed first"
     expected_body = json.loads(context.text)
     result = context.response.json()
 
@@ -115,6 +149,7 @@ def check_prediction_result(context: Context) -> None:
 @then('The body of the response, ignoring the "{field}" field, is the following')
 def check_prediction_result_ignoring_field(context: Context, field: str) -> None:
     """Check the content of the response to be exactly the same."""
+    assert context.response is not None, "Request needs to be performed first"
     expected_body = json.loads(context.text).copy()
     result = context.response.json().copy()
 
@@ -153,7 +188,12 @@ def access_non_rest_api_endpoint_get(context: Context, endpoint: str) -> None:
     base = f"http://{context.hostname}:{context.port}"
     path = f"{endpoint}".replace("//", "/")
     url = base + path
+    # initial value
+    context.response = None
+
+    # perform REST API call
     context.response = requests.get(url, timeout=DEFAULT_TIMEOUT)
+    assert context.response is not None, "Response is None"
 
 
 @when("I access REST API endpoint {endpoint} using HTTP GET method")
@@ -163,6 +203,10 @@ def access_rest_api_endpoint_get(context: Context, endpoint: str) -> None:
     base = f"http://{context.hostname}:{context.port}"
     path = f"{context.api_prefix}/{endpoint}".replace("//", "/")
     url = base + path
+    # initial value
+    context.response = None
+
+    # perform REST API call
     context.response = requests.get(url, timeout=DEFAULT_TIMEOUT)
 
 
@@ -174,6 +218,10 @@ def access_rest_api_endpoint_post(context: Context, endpoint: str) -> None:
     url = base + path
 
     data = json.loads(context.text)
+    # initial value
+    context.response = None
+
+    # perform REST API call
     context.response = requests.post(url, json=data, timeout=DEFAULT_TIMEOUT)
 
 
@@ -197,6 +245,7 @@ def check_status_of_response(context: Context, expected_message: str) -> None:
 @then("I should see attribute named {attribute:w} in response")
 def check_attribute_presence(context: Context, attribute: str) -> None:
     """Check if given attribute is returned in HTTP response."""
+    assert context.response is not None, "Request needs to be performed first"
     json = context.response.json()
     assert json is not None
 
@@ -206,6 +255,7 @@ def check_attribute_presence(context: Context, attribute: str) -> None:
 @then("Attribute {attribute:w} should be null")
 def check_for_null_attribute(context: Context, attribute: str) -> None:
     """Check if given attribute returned in HTTP response is null."""
+    assert context.response is not None, "Request needs to be performed first"
     json = context.response.json()
     assert json is not None
 

@@ -12,16 +12,11 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.11'
-      - name: Python version
-        run: python --version
-      - name: PDM installation
-        run: pip install --user pdm
+          python-version: '3.12'
       - name: Install dependencies
-        run: pdm install
-      - name: Install devel dependencies
-        run: pdm install --group default,dev
+        run: uv sync
       - name: Python linter
-        run: make check-types
+        run: uv run mypy --explicit-package-bases --disallow-untyped-calls --disallow-untyped-defs --disallow-incomplete-defs --ignore-missing-imports --disable-error-code attr-defined src/
