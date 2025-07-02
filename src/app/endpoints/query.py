@@ -65,18 +65,18 @@ def query_endpoint_handler(
     """Handle request to the /query endpoint."""
     llama_stack_config = configuration.llama_stack_configuration
     logger.info("LLama stack config: %s", llama_stack_config)
-<<<<<<< HEAD
     client = get_llama_stack_client(llama_stack_config)
     model_id = select_model_id(client.models.list(), query_request)
-=======
->>>>>>> c2a7397 (feat(redaction): Add configurable regex-based query and attachment redaction with full test coverag)
     conversation_id = retrieve_conversation_id(query_request)
 
     # Apply redaction shields (replicating old road-core logic)
     try:
         # Redact query
-        redacted_query_text = redact_query(conversation_id, query_request.query or "")
-
+        redacted_query_text = (
+            redact_query(conversation_id, query_request.query)
+            or query_request.query
+            or ""
+        )
         # Redact attachments
         redacted_attachments = []
         if query_request.attachments:
@@ -108,7 +108,7 @@ def query_endpoint_handler(
     # Continue with existing logic using redacted content
     try:
         client = get_llama_stack_client(llama_stack_config)
-        model_id = select_model_id(client, redacted_request)
+        model_id = select_model_id(client.models.list(), redacted_request)
         response = retrieve_response(client, model_id, redacted_request, auth)
 
     except Exception as llm_error:
