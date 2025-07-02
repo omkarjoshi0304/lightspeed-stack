@@ -143,7 +143,7 @@ class RedactionShield:
             )
             return messages  # Fallback: return unredacted messages
 
-    def _copy_message(self, message):
+    def _copy_message(self, message: Any) -> Any:
         """
         Safely clone a message object using available copy methods.
 

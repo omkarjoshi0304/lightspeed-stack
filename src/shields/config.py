@@ -73,7 +73,7 @@ def load_redaction_patterns_from_config(config: Any) -> Optional[List[Dict[str, 
         return None
 
 
-def create_shield_with_config(config: Any):
+def create_shield_with_config(config: Any) -> Any:
     """
     Create a redaction shield using the loaded configuration patterns.
 
