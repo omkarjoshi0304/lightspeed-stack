@@ -8,7 +8,7 @@ from log import get_logger
 from configuration import configuration
 from utils.common import register_mcp_servers_async
 
-configuration.load_configuration("lightspeed-stack.yaml")
+
 logger = get_logger(__name__)
 
 logger.info("Initializing app")
