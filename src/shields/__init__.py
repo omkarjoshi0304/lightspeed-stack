@@ -1,5 +1,6 @@
 """
 Shields module for query and attachment redaction.
+
 Provides Llama Stack compatible shield implementations.
 """
 

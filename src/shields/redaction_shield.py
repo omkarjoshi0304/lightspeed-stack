@@ -1,5 +1,6 @@
 """
 Redaction shield for Llama Stack integration.
+
 This implements the same functionality as the old road-core/service query_redactor.
 """
 
@@ -18,6 +19,7 @@ class RedactionShield:
     def __init__(self, patterns: Optional[List[Dict[str, str]]] = None):
         """
         Initialize the redaction shield.
+
         If no custom patterns are provided, attempts to load from config. Falls back to defaults.
         """
         if patterns is None:
@@ -35,6 +37,7 @@ class RedactionShield:
     def _get_default_patterns(self) -> List[Dict[str, str]]:
         """
         Fallback redaction patterns when none are configured.
+
         These cover common sensitive terms like passwords, secrets, tokens, etc.
         """
         return [
@@ -115,6 +118,7 @@ class RedactionShield:
     def run(self, messages: List[Any], conversation_id: str = "unknown") -> List[Any]:
         """
         Run redaction on a list of messages (e.g., user messages sent to LLM).
+
         Will not mutate the original message objects.
         """
         try:
@@ -142,6 +146,7 @@ class RedactionShield:
     def _copy_message(self, message):
         """
         Safely clone a message object using available copy methods.
+
         This supports both Pydantic and dataclass-style models.
         """
         if hasattr(message, "model_copy"):
@@ -161,6 +166,7 @@ def get_redaction_shield(
 ) -> RedactionShield:
     """
     Returns a shared singleton instance of the RedactionShield,
+
     unless custom patterns are explicitly passed.
     """
     global _shield_instance
@@ -172,6 +178,7 @@ def get_redaction_shield(
 def redact_query(conversation_id: str, query: Optional[str]) -> Optional[str]:
     """
     Redacts sensitive terms in a query string using the global redaction shield.
+
     Maintains compatibility with legacy road-core signature.
     """
     shield = get_redaction_shield()
@@ -181,6 +188,7 @@ def redact_query(conversation_id: str, query: Optional[str]) -> Optional[str]:
 def redact_attachments(conversation_id: str, attachments: List[Any]) -> List[Any]:
     """
     Redacts content inside attachment objects.
+
     Falls back to unmodified attachments if redaction fails.
     """
     try:
