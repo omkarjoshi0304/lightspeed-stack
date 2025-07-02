@@ -15,8 +15,38 @@ router = APIRouter(tags=["config"])
 get_config_responses: dict[int | str, dict[str, Any]] = {
     200: {
         "name": "foo bar baz",
-        "llama_stack": {"url": "http://localhost:8321", "api_key": "xyzzy"},
+        "service": {
+            "host": "localhost",
+            "port": 8080,
+            "auth_enabled": False,
+            "workers": 1,
+            "color_log": True,
+            "access_log": True,
+            "tls_config": {
+                "tls_certificate_path": "config/certificate.crt",
+                "tls_key_path": "config/private.key",
+                "tls_key_password": None,
+            },
+        },
+        "llama_stack": {
+            "url": "http://localhost:8321",
+            "api_key": "xyzzy",
+            "use_as_library_client": False,
+            "library_client_config_path": None,
+        },
+        "user_data_collection": {
+            "feedback_disabled": False,
+            "feedback_storage": "/tmp/data/feedback",
+            "transcripts_disabled": True,
+            "transcripts_storage": None,
+        },
+        "mcp_servers": [
+            {"name": "server1", "provider_id": "provider1", "url": "http://url.com:1"},
+            {"name": "server2", "provider_id": "provider2", "url": "http://url.com:2"},
+            {"name": "server3", "provider_id": "provider3", "url": "http://url.com:3"},
+        ],
     },
+    503: {"description": "Configuration can not be loaded"},
 }
 
 

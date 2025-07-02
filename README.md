@@ -17,6 +17,9 @@ Lightspeed Core Stack (LCS) is an AI powered assistant that provides answers to 
 * [Usage](#usage)
     * [Make targets](#make-targets)
     * [Running Linux container image](#running-linux-container-image)
+* [Endpoints](#endpoints)
+    * [Readiness Endpoint](#readiness-endpoint)
+    * [Liveness Endpoint](#liveness-endpoint)
 * [Contributing](#contributing)
 * [License](#license)
 * [Additional tools](#additional-tools)
@@ -40,7 +43,64 @@ Installation steps depends on operation system. Please look at instructions for 
 - [Linux installation](https://lightspeed-core.github.io/lightspeed-stack/installation_linux)
 - [macOS installation](https://lightspeed-core.github.io/lightspeed-stack/installation_macos)
 
+
+
 # Configuration
+
+The Llama Stack can be run as a standalone server and accessed via its the REST
+API. However, instead of direct communication via the REST API (and JSON
+format), there is an even better alternative. It is based on the so-called
+Llama Stack Client. It is a library available for Python, Swift, Node.js or
+Kotlin, which "wraps" the REST API stack in a suitable way, which is easier for
+many applications.
+
+## Llama Stack as separate server
+
+If Llama Stack runs as a separate server, the Lightspeed service needs to be configured to be able to access it. For example, if server runs on localhost:8321, the service configuration should look like:
+
+```yaml
+name: foo bar baz
+service:
+  host: localhost
+  port: 8080
+  auth_enabled: false
+  workers: 1
+  color_log: true
+  access_log: true
+llama_stack:
+  use_as_library_client: false
+  url: http://localhost:8321
+user_data_collection:
+  feedback_disabled: false
+  feedback_storage: "/tmp/data/feedback"
+  transcripts_disabled: false
+  transcripts_storage: "/tmp/data/transcripts"
+```
+
+## Llama Stack as client library
+
+There are situations in which it is not advisable to run two processors (one with Llama Stack, the other with a service). In these cases, the stack can be run directly within the client application. For such situations, the configuration file could look like:
+
+```yaml
+name: foo bar baz
+service:
+  host: localhost
+  port: 8080
+  auth_enabled: false
+  workers: 1
+  color_log: true
+  access_log: true
+llama_stack:
+  use_as_library_client: true
+  library_client_config_path: <path-to-llama-stack-run.yaml-file>
+user_data_collection:
+  feedback_disabled: false
+  feedback_storage: "/tmp/data/feedback"
+  transcripts_disabled: false
+  transcripts_storage: "/tmp/data/transcripts"
+```
+
+
 
 # Usage
 
@@ -88,6 +148,50 @@ To pull and run the image with own configuration:
 1. Open `localhost:8080` in your browser
 
 If a connection in your browser does not work please check that in the config file `host` option looks like: `host: 0.0.0.0`.
+
+# Endpoints
+
+The service provides health check endpoints that can be used for monitoring, load balancing, and orchestration systems like Kubernetes.
+
+## Readiness Endpoint
+
+**Endpoint:** `GET /v1/readiness`
+
+The readiness endpoint checks if the service is ready to handle requests by verifying the health status of all configured LLM providers.
+
+**Response:**
+- **200 OK**: Service is ready - all providers are healthy
+- **503 Service Unavailable**: Service is not ready - one or more providers are unhealthy
+
+**Response Body:**
+```json
+{
+  "ready": true,
+  "reason": "All providers are healthy",
+  "providers": []
+}
+```
+
+**Response Fields:**
+- `ready` (boolean): Indicates if the service is ready to handle requests
+- `reason` (string): Human-readable explanation of the readiness state
+- `providers` (array): List of unhealthy providers (empty when service is ready)
+
+## Liveness Endpoint
+
+**Endpoint:** `GET /v1/liveness`
+
+The liveness endpoint performs a basic health check to verify the service is alive and responding.
+
+**Response:**
+- **200 OK**: Service is alive
+
+**Response Body:**
+```json
+{
+  "alive": true
+}
+```
 
 # Contributing
 

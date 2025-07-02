@@ -12,6 +12,7 @@ from app.endpoints import (
     health,
     config,
     feedback,
+    streaming_query,
 )  # noqa:E402
 
 
@@ -41,3 +42,4 @@ def test_include_routers() -> None:
     assert health.router in app.routers
     assert config.router in app.routers
     assert feedback.router in app.routers
+    assert streaming_query.router in app.routers
