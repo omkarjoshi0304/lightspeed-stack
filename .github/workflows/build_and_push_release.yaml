@@ -30,7 +30,7 @@ jobs:
       - name: Build image with Buildah
         uses: redhat-actions/buildah-build@v2
         with:
-          image: ${{ env.IMAGE_NAME }}
+          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}
           tags: |
             ${{ env.GIT_TAG }}
             ${{ env.LATEST_TAG }}
