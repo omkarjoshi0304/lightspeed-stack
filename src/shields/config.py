@@ -83,6 +83,8 @@ def create_shield_with_config(config: Any) -> Any:
     Returns:
         Configured RedactionShield instance
     """
-    from .redaction_shield import RedactionShield  # pylint: disable=import-outside-toplevel, disable=cyclic-import
+    from .redaction_shield import (  # pylint: disable=import-outside-toplevel, disable=cyclic-import
+        RedactionShield,
+    )
 
     return RedactionShield(load_redaction_patterns_from_config(config))
