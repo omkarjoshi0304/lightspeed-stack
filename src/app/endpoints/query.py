@@ -98,11 +98,13 @@ def query_endpoint_handler(
             attachments=redacted_attachments,
         )
 
-        logger.debug(f"Redaction completed for conversation {conversation_id}")
+        logger.debug("Redaction completed for conversation: %s", conversation_id)
 
-    except Exception as redaction_error:
+    except ValueError as redaction_error:
         logger.error(
-            f"Error during redaction for conversation {conversation_id}: {redaction_error}"
+            "Error during redaction for conversation: %s: %s",
+            conversation_id,
+            redaction_error,
         )
         # Use original request if redaction fails
         redacted_request = query_request
@@ -115,9 +117,9 @@ def query_endpoint_handler(
         model_id = select_model_id(client.models.list(), redacted_request)
         response = retrieve_response(client, model_id, redacted_request, auth)
 
-    except Exception as llm_error:
+    except Exception as llm_error:  # pylint: disable=broad-exception-caught
         logger.error(
-            f"Error calling LLM for conversation {conversation_id}: {llm_error}"
+            "Error calling LLM for conversation: %s: %s", conversation_id, llm_error
         )
         # For testing purposes, return a mock response showing redaction worked
         response = f"Mock response based on redacted query: '{redacted_query_text}'"

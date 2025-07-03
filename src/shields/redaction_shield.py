@@ -25,14 +25,14 @@ class RedactionShield:
         if patterns is None:
             try:
                 patterns = load_redaction_patterns_from_config(configuration)
-            except Exception as e:
-                logger.warning(f"Could not load patterns from configuration: {e}")
+            except ValueError as e:
+                logger.warning("Could not load patterns from configuration: %s", e)
                 patterns = None
 
         # Use the provided patterns, or fall back to default ones if none are available
         self.patterns = patterns or self._get_default_patterns()
         self.compiled_patterns = self._compile_patterns()
-        logger.info(f"Initialized RedactionShield with {len(self.patterns)} patterns")
+        logger.info("Initialized RedactionShield with %s patterns", len(self.patterns))
 
     def _get_default_patterns(self) -> List[Dict[str, str]]:
         """
@@ -50,9 +50,7 @@ class RedactionShield:
         ]
 
     def _compile_patterns(self) -> List[Dict[str, Any]]:
-        """
-        Precompile regex patterns to improve performance during repeated redaction.
-        """
+        """Precompile regex patterns to improve performance during repeated redaction."""
         compiled = []
         for pattern_config in self.patterns:
             try:
@@ -64,11 +62,13 @@ class RedactionShield:
                     }
                 )
                 logger.debug(
-                    f"Compiled pattern: {pattern_config['pattern']} -> {pattern_config['replacement']}"
+                    "Compiled pattern: %s -> %s",
+                    pattern_config["pattern"],
+                    pattern_config["replacement"],
                 )
             except (re.error, KeyError) as e:
                 logger.error(
-                    f"Invalid pattern configuration: {pattern_config}, error: {e}"
+                    "Invalid pattern configuration: %s, error: %s", pattern_config, e
                 )
         return compiled
 
@@ -101,16 +101,24 @@ class RedactionShield:
                     redacted_text = pattern.sub(replacement, redacted_text)
                     redactions_made += len(matches)
                     logger.debug(
-                        f"Applied pattern '{original}' to conversation {conversation_id}: {len(matches)} matches"
+                        "Applied pattern '%s' to conversation %s: %s matches",
+                        original,
+                        conversation_id,
+                        len(matches),
                     )
-            except Exception as e:
+            except ValueError as e:
                 logger.error(
-                    f"Error applying pattern '{pattern_info['original']}' to conversation {conversation_id}: {e}"
+                    "Error applying pattern '%s' to conversation %s: %s",
+                    pattern_info["original"],
+                    conversation_id,
+                    e,
                 )
 
         if redactions_made:
             logger.info(
-                f"Applied {redactions_made} redactions for conversation {conversation_id}"
+                "Applied %s redactions for conversation %s",
+                redactions_made,
+                conversation_id,
             )
 
         return redacted_text
@@ -137,9 +145,9 @@ class RedactionShield:
                 redacted_messages.append(redacted_message)
 
             return redacted_messages
-        except Exception as e:
+        except ValueError as e:
             logger.error(
-                f"Error in redaction shield for conversation {conversation_id}: {e}"
+                "Error in redaction shield for conversation %s: %s", conversation_id, e
             )
             return messages  # Fallback: return unredacted messages
 
@@ -151,28 +159,27 @@ class RedactionShield:
         """
         if hasattr(message, "model_copy"):
             return message.model_copy()
-        elif hasattr(message, "copy"):
+        if hasattr(message, "copy"):
             return message.copy()
-        else:
-            return message  # fallback: shallow copy
+        return message  # fallback: shallow copy
 
 
 # Singleton instance for the redaction shield to avoid repeated instantiation
-_shield_instance = None
+SHIELD_INSTANCE = None
 
 
 def get_redaction_shield(
     patterns: Optional[List[Dict[str, str]]] = None,
 ) -> RedactionShield:
     """
-    Returns a shared singleton instance of the RedactionShield,
+    Return a shared singleton instance of the RedactionShield.
 
-    unless custom patterns are explicitly passed.
+    Unless custom patterns are explicitly passed.
     """
-    global _shield_instance
-    if _shield_instance is None or patterns is not None:
-        _shield_instance = RedactionShield(patterns)
-    return _shield_instance
+    global SHIELD_INSTANCE  # pylint: disable=global-statement
+    if SHIELD_INSTANCE is None or patterns is not None:
+        SHIELD_INSTANCE = RedactionShield(patterns)
+    return SHIELD_INSTANCE
 
 
 def redact_query(conversation_id: str, query: Optional[str]) -> Optional[str]:
@@ -207,8 +214,10 @@ def redact_attachments(conversation_id: str, attachments: List[Any]) -> List[Any
             redacted.append(redacted_attachment)
 
         return redacted
-    except Exception as redactor_error:
+    except Exception as redactor_error:  # pylint: disable=broad-exception-caught
         logger.error(
-            f"Error while redacting attachments for conversation {conversation_id}: {redactor_error}"
+            "Error while redacting attachments for conversation %s: %s",
+            conversation_id,
+            redactor_error,
         )
         return attachments

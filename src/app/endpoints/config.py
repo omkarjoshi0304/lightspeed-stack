@@ -54,5 +54,5 @@ get_config_responses: dict[int | str, dict[str, Any]] = {
 def config_endpoint_handler(_request: Request) -> Configuration:
     """Handle requests to the /config endpoint."""
     if configuration is None or configuration.configuration is None:
-        raise Exception("logic error: configuration is not loaded")
+        raise ValueError("logic error: configuration is not loaded")
     return configuration.configuration

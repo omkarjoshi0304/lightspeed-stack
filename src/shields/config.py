@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _extract_patterns(source: Any) -> Optional[List[Dict[str, str]]]:
     """
-    Extracts redaction patterns from a given source object.
+    Extract redaction patterns from a given source object.
 
     Args:
         source: List of dicts or Pydantic models
@@ -28,8 +28,8 @@ def _extract_patterns(source: Any) -> Optional[List[Dict[str, str]]]:
 
     try:
         return [item.model_dump() for item in source]
-    except Exception as e:
-        logger.warning(f"Failed to convert redaction patterns to dict: {e}")
+    except ValueError as e:
+        logger.warning("Failed to convert redaction patterns to dict: %s", e)
         return None
 
 
@@ -52,7 +52,7 @@ def load_redaction_patterns_from_config(config: Any) -> Optional[List[Dict[str, 
             patterns = _extract_patterns(config.redaction_patterns)
             if patterns:
                 logger.info(
-                    f"Loaded {len(patterns)} redaction patterns from root config"
+                    "Loaded %s redaction patterns from root config", len(patterns)
                 )
                 return patterns
 
@@ -61,15 +61,15 @@ def load_redaction_patterns_from_config(config: Any) -> Optional[List[Dict[str, 
             patterns = _extract_patterns(config.shields.redaction_patterns)
             if patterns:
                 logger.info(
-                    f"Loaded {len(patterns)} redaction patterns from shields config"
+                    "Loaded %s redaction patterns from shields config", len(patterns)
                 )
                 return patterns
 
         logger.info("No redaction patterns found in configuration, using defaults")
         return None
 
-    except Exception as e:
-        logger.error(f"Error loading redaction patterns from configuration: {e}")
+    except ValueError as e:
+        logger.error("Error loading redaction patterns from configuration: %s", e)
         return None
 
 
@@ -83,6 +83,6 @@ def create_shield_with_config(config: Any) -> Any:
     Returns:
         Configured RedactionShield instance
     """
-    from .redaction_shield import RedactionShield
+    from .redaction_shield import RedactionShield  # pylint: disable=import-outside-toplevel, disable=cyclic-import
 
     return RedactionShield(load_redaction_patterns_from_config(config))
