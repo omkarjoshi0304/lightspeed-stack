@@ -60,7 +60,7 @@ pyright:
 	uv run pyright src
 
 docstyle:
-	uv run pydocstyle -v .
+	uv run pydocstyle -v src
 
 ruff:
 	uv run ruff check . --per-file-ignores=tests/*:S101 --per-file-ignores=scripts/*:S101
