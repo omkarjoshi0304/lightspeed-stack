@@ -182,3 +182,6 @@ dev/
 
 # VSCode
 .vscode/
+
+# Llama related - when running the stack as lib client
+.llama
