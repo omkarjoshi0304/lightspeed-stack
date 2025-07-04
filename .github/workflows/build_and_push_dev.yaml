@@ -1,20 +1,18 @@
-name: Build image from a tag and push it to Quay.io
+name: Build image, main branch push quay.io
 
 on:
   push:
-    tags:
-      - '*'  # Trigger for all tags
+    branches: [ main ]
 
 env:
   IMAGE_NAME: lightspeed-stack
   IMAGE_NAMESPACE: lightspeed-core
   IMAGE_REGISTRY: quay.io
-  GIT_TAG: ${{ github.ref_name }}
-  LATEST_TAG: latest
+  LATEST_TAG: dev-latest
   CONTAINER_FILE: Containerfile
 
 jobs:
-  build-and-push-release:
+  build-and-push-dev:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,17 +25,22 @@ jobs:
           sudo apt install -y buildah
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Create dev image tag
+        run: |
+          echo "DEV_TAG=dev-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "dev image tag: ${{ env.DEV_TAG }}"
       - name: Build image with Buildah
         id: build_image
         uses: redhat-actions/buildah-build@v2
         with:
           image: ${{ env.IMAGE_NAME }}
           tags: |
-            ${{ env.GIT_TAG }}
+            ${{ env.DEV_TAG }}
             ${{ env.LATEST_TAG }}
           containerfiles: |
             ${{ env.CONTAINER_FILE }}
           oci: true
+
       - name: Push image to Quay.io
         uses: redhat-actions/push-to-registry@v2
         with:
