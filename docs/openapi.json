@@ -7,7 +7,7 @@
             "name": "Apache 2.0",
             "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
         },
-        "version": "0.0.1"
+        "version": "0.1.0"
     },
     "paths": {
         "/": {
@@ -96,6 +96,9 @@
                                 "model_type": "llm"
                             }
                         ]
+                    },
+                    "503": {
+                        "description": "Connection to Llama Stack is broken"
                     }
                 }
             }
@@ -130,6 +133,13 @@
                         },
                         "conversation_id": "123e4567-e89b-12d3-a456-426614174000",
                         "response": "LLM ansert"
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "detail": {
+                            "response": "Unable to connect to Llama Stack",
+                            "cause": "Connection error."
+                        }
                     },
                     "422": {
                         "description": "Validation Error",
@@ -268,7 +278,10 @@
                         ]
                     },
                     "503": {
-                        "description": "Configuration can not be loaded"
+                        "description": "Service Unavailable",
+                        "detail": {
+                            "response": "Configuration is no loaded"
+                        }
                     }
                 }
             }
