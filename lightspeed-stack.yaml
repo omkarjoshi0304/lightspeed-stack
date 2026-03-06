@@ -31,8 +31,6 @@ conversation_cache:
 authentication:
   module: "noop"
 
-<<<<<<< HEAD
-
 # OKP Solr for supplementary RAG
 solr:
   enabled: false
@@ -51,5 +49,3 @@ byok_rag:
     embedding_dimension: 768
     vector_db_id: "vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360"
     db_path: "/Users/ojoshi/Documents/GitHub/rag-content/vector_db/faiss_store.db"
-=======
->>>>>>> refs/remotes/origin/main
