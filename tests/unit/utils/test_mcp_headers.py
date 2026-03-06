@@ -203,6 +203,7 @@ class TestExtractPropagatedHeaders:
             name="rbac",
             url="http://rbac:8080",
             headers=["x-rh-identity", "x-request-id"],
+            provider_id="xyzzy",
         )
         request_headers = {
             "x-rh-identity": "encoded-identity-value",
@@ -221,6 +222,7 @@ class TestExtractPropagatedHeaders:
             name="rbac",
             url="http://rbac:8080",
             headers=["x-rh-identity", "x-missing-header"],
+            provider_id="xyzzy",
         )
         request_headers = {
             "x-rh-identity": "identity-value",
@@ -234,6 +236,7 @@ class TestExtractPropagatedHeaders:
             name="rbac",
             url="http://rbac:8080",
             headers=[],
+            provider_id="xyzzy",
         )
         request_headers = {"x-rh-identity": "identity-value"}
         result = extract_propagated_headers(server, request_headers)
@@ -245,6 +248,7 @@ class TestExtractPropagatedHeaders:
             name="rbac",
             url="http://rbac:8080",
             headers=["x-rh-identity"],
+            provider_id="xyzzy",
         )
         result = extract_propagated_headers(server, {})
         assert not result
@@ -255,6 +259,7 @@ class TestExtractPropagatedHeaders:
             name="rbac",
             url="http://rbac:8080",
             headers=["X-Rh-Identity"],
+            provider_id="xyzzy",
         )
         # FastAPI/Starlette lowercases header names internally
         request_headers = {"x-rh-identity": "identity-value"}
@@ -267,6 +272,7 @@ class TestExtractPropagatedHeaders:
             name="rbac",
             url="http://rbac:8080",
             headers=["x-rh-identity"],
+            provider_id="xyzzy",
         )
         # Plain dict with mixed-case keys (not Starlette Headers)
         request_headers = {"X-RH-Identity": "identity-value"}
@@ -278,6 +284,7 @@ class TestExtractPropagatedHeaders:
         server = ModelContextProtocolServer(
             name="rbac",
             url="http://rbac:8080",
+            provider_id="xyzzy",
         )
         request_headers = {"x-rh-identity": "identity-value"}
         result = extract_propagated_headers(server, request_headers)

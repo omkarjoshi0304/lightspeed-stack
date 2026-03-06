@@ -2,6 +2,7 @@
 
 from logging import Logger
 
+from pydantic import AnyHttpUrl
 from pytest_mock import MockerFixture
 
 import pytest
@@ -37,10 +38,11 @@ async def test_register_mcp_servers_empty_list(mocker: MockerFixture) -> None:
             workers=10,
             color_log=True,
             access_log=True,
+            root_path="/.",
         ),
         llama_stack=LlamaStackConfiguration(
             use_as_library_client=False,
-            url="http://localhost:8321",
+            url=AnyHttpUrl("http://localhost:8321"),
             library_client_config_path=None,
             api_key=None,
             timeout=60,
@@ -98,10 +100,11 @@ async def test_register_mcp_servers_single_server_not_registered(
             workers=10,
             color_log=True,
             access_log=True,
+            root_path="/.",
         ),
         llama_stack=LlamaStackConfiguration(
             use_as_library_client=False,
-            url="http://localhost:8321",
+            url=AnyHttpUrl("http://localhost:8321"),
             library_client_config_path=None,
             api_key=None,
             timeout=60,
@@ -161,10 +164,11 @@ async def test_register_mcp_servers_single_server_already_registered(
             workers=10,
             color_log=True,
             access_log=True,
+            root_path="/.",
         ),
         llama_stack=LlamaStackConfiguration(
             use_as_library_client=False,
-            url="http://localhost:8321",
+            url=AnyHttpUrl("http://localhost:8321"),
             library_client_config_path=None,
             api_key=None,
             timeout=60,
@@ -233,10 +237,11 @@ async def test_register_mcp_servers_multiple_servers_mixed_registration(
             workers=10,
             color_log=True,
             access_log=True,
+            root_path="/.",
         ),
         llama_stack=LlamaStackConfiguration(
             use_as_library_client=False,
-            url="http://localhost:8321",
+            url=AnyHttpUrl("http://localhost:8321"),
             library_client_config_path=None,
             api_key=None,
             timeout=60,
@@ -304,10 +309,11 @@ async def test_register_mcp_servers_with_custom_provider(mocker: MockerFixture) 
             workers=10,
             color_log=True,
             access_log=True,
+            root_path="/.",
         ),
         llama_stack=LlamaStackConfiguration(
             use_as_library_client=False,
-            url="http://localhost:8321",
+            url=AnyHttpUrl("http://localhost:8321"),
             library_client_config_path=None,
             api_key=None,
             timeout=60,
@@ -375,6 +381,7 @@ async def test_register_mcp_servers_async_with_library_client(
             workers=10,
             color_log=True,
             access_log=True,
+            root_path="/.",
         ),
         llama_stack=LlamaStackConfiguration(
             use_as_library_client=True,

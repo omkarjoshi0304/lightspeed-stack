@@ -21,8 +21,6 @@ from llama_stack_api.openai_responses import (
 from llama_stack_client.lib.agents.tool_parser import ToolParser
 from llama_stack_client.lib.agents.types import (
     CompletionMessage as AgentCompletionMessage,
-)
-from llama_stack_client.lib.agents.types import (
     ToolCall as AgentToolCall,
 )
 from pydantic import AnyUrl, BaseModel, Field
@@ -222,6 +220,27 @@ class ResponsesApiParams(BaseModel):
         description="Extra HTTP headers to send with the request (e.g. x-llamastack-provider-data)",
     )
 
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Serialize params, re-injecting MCP authorization stripped by exclude=True.
+
+        llama-stack-api marks ``InputToolMCP.authorization`` with
+        ``Field(exclude=True)`` to prevent token leakage in API responses.
+        The base ``model_dump()`` therefore strips the field, but we need it
+        in the request payload so llama-stack server can authenticate with
+        MCP servers.  See LCORE-1414 / GitHub issue #1269.
+        """
+        result = super().model_dump(*args, **kwargs)
+        dumped_tools = result.get("tools")
+        if not self.tools or not isinstance(dumped_tools, list):
+            return result
+        if len(dumped_tools) != len(self.tools):
+            return result
+        for tool, dumped_tool in zip(self.tools, dumped_tools):
+            authorization = getattr(tool, "authorization", None)
+            if authorization is not None and isinstance(dumped_tool, dict):
+                dumped_tool["authorization"] = authorization
+        return result
+
 
 class ToolCallSummary(BaseModel):
     """Model representing a tool call made during response generation (for tool_calls list)."""
@@ -285,6 +304,26 @@ class ReferencedDocument(BaseModel):
     )
 
 
+class RAGContext(BaseModel):
+    """Result of building RAG context from all enabled pre-query RAG sources.
+
+    Attributes:
+        context_text: Formatted RAG context string for injection into the query.
+        rag_chunks: RAG chunks from pre-query sources (BYOK + Solr).
+        referenced_documents: Referenced documents from pre-query sources.
+    """
+
+    context_text: str = Field(default="", description="Formatted context for injection")
+    rag_chunks: list[RAGChunk] = Field(
+        default_factory=list,
+        description="RAG chunks from pre-query sources",
+    )
+    referenced_documents: list[ReferencedDocument] = Field(
+        default_factory=list,
+        description="Documents from pre-query sources",
+    )
+
+
 class TurnSummary(BaseModel):
     """Summary of a turn in llama stack."""
 
@@ -293,7 +332,7 @@ class TurnSummary(BaseModel):
     tool_results: list[ToolResultSummary] = Field(default_factory=list)
     rag_chunks: list[RAGChunk] = Field(default_factory=list)
     referenced_documents: list[ReferencedDocument] = Field(default_factory=list)
-    pre_rag_documents: list[ReferencedDocument] = Field(default_factory=list)
+    inline_rag_documents: list[ReferencedDocument] = Field(default_factory=list)
     token_usage: TokenCounter = Field(default_factory=TokenCounter)
 
 

@@ -113,12 +113,12 @@ CREATE_TOKEN_USAGE_TABLE = """
         updated_at      timestamp with time zone,
         PRIMARY KEY(user_id, provider, model)
     );
-    """  # noqa: S105
+    """
 
 INIT_TOKEN_USAGE_FOR_USER = """
     INSERT INTO token_usage (user_id, provider, model, input_tokens, output_tokens, updated_at)
     VALUES (%s, %s, %s, 0, 0, %s)
-    """  # noqa: S105
+    """
 
 CONSUME_TOKENS_FOR_USER_SQLITE = """
     INSERT INTO token_usage (user_id, provider, model, input_tokens, output_tokens, updated_at)
@@ -131,7 +131,7 @@ CONSUME_TOKENS_FOR_USER_SQLITE = """
      WHERE token_usage.user_id=:user_id
        AND token_usage.provider=:provider
        AND token_usage.model=:model
-    """  # noqa: E501
+    """
 
 CONSUME_TOKENS_FOR_USER_PG = """
     INSERT INTO token_usage (user_id, provider, model, input_tokens, output_tokens, updated_at)
@@ -144,4 +144,4 @@ CONSUME_TOKENS_FOR_USER_PG = """
      WHERE token_usage.user_id=%(user_id)s
        AND token_usage.provider=%(provider)s
        AND token_usage.model=%(model)s
-    """  # noqa: E501
+    """

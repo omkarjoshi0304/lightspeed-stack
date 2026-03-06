@@ -1,5 +1,6 @@
 """Utility functions for system prompts."""
 
+from typing import Optional
 from fastapi import HTTPException
 
 import constants
@@ -7,7 +8,7 @@ from configuration import configuration
 from models.responses import UnprocessableEntityResponse
 
 
-def get_system_prompt(system_prompt: str | None) -> str:
+def get_system_prompt(system_prompt: Optional[str]) -> str:
     """
     Resolve which system prompt to use for a query.
 

@@ -2,6 +2,10 @@
 
 import pytest
 from llama_stack_api import ImageContentItem, TextContentItem, URL, _URLOrData
+from llama_stack_api.openai_responses import (
+    OpenAIResponseInputToolFileSearch as InputToolFileSearch,
+    OpenAIResponseInputToolMCP as InputToolMCP,
+)
 
 from pydantic import AnyUrl, ValidationError
 from pytest_mock import MockerFixture
@@ -9,6 +13,7 @@ from pytest_mock import MockerFixture
 from utils.types import (
     GraniteToolParser,
     ReferencedDocument,
+    ResponsesApiParams,
     ToolCallSummary,
     ToolResultSummary,
     content_to_str,
@@ -194,3 +199,130 @@ class TestReferencedDocument:
         doc = ReferencedDocument(doc_title="Test Title")
         assert doc.doc_url is None
         assert doc.doc_title == "Test Title"
+
+
+class TestResponsesApiParamsModelDump:
+    """Tests for ResponsesApiParams.model_dump() MCP authorization fix.
+
+    Regression tests for LCORE-1414 / GitHub issue #1269: llama-stack-api's
+    InputToolMCP.authorization has Field(exclude=True), causing the base
+    model_dump() to silently strip authorization tokens.
+    """
+
+    def _make_params(self, tools: list) -> ResponsesApiParams:
+        """Build minimal ResponsesApiParams with given tools."""
+        return ResponsesApiParams(
+            input="test question",
+            model="provider/model",
+            conversation="conv-id",
+            store=False,
+            stream=False,
+            tools=tools,
+        )
+
+    def test_mcp_authorization_survives_model_dump(self) -> None:
+        """Test that MCP authorization is re-injected after model_dump()."""
+        tool = InputToolMCP(
+            server_label="auth-server",
+            server_url="http://localhost:3000",
+            require_approval="never",
+            authorization="my-secret-token",
+        )
+        assert tool.authorization == "my-secret-token"
+        assert "authorization" not in tool.model_dump()
+
+        params = self._make_params([tool])
+        dumped = params.model_dump(exclude_none=True)
+        assert dumped["tools"][0]["authorization"] == "my-secret-token"
+
+    def test_mcp_authorization_none_not_injected(self) -> None:
+        """Test that None authorization is not added to the dump."""
+        tool = InputToolMCP(
+            server_label="no-auth-server",
+            server_url="http://localhost:3000",
+            require_approval="never",
+        )
+        params = self._make_params([tool])
+        dumped = params.model_dump(exclude_none=True)
+        assert "authorization" not in dumped["tools"][0]
+
+    def test_non_mcp_tools_unaffected(self) -> None:
+        """Test that non-MCP tools are not modified by the override."""
+        tool = InputToolFileSearch(
+            type="file_search",
+            vector_store_ids=["vs-1"],
+        )
+        params = self._make_params([tool])
+        dumped = params.model_dump(exclude_none=True)
+        assert "authorization" not in dumped["tools"][0]
+
+    def test_mixed_tools_only_mcp_gets_authorization(self) -> None:
+        """Test mixed tool list: only MCP tools get authorization re-injected."""
+        mcp_tool = InputToolMCP(
+            server_label="auth-server",
+            server_url="http://localhost:3000",
+            require_approval="never",
+            authorization="secret",
+        )
+        file_tool = InputToolFileSearch(
+            type="file_search",
+            vector_store_ids=["vs-1"],
+        )
+        params = self._make_params([file_tool, mcp_tool])
+        dumped = params.model_dump(exclude_none=True)
+
+        assert "authorization" not in dumped["tools"][0]
+        assert dumped["tools"][1]["authorization"] == "secret"
+
+    def test_multiple_mcp_tools_each_preserves_authorization(self) -> None:
+        """Test that each MCP tool gets its own authorization re-injected."""
+        tool_a = InputToolMCP(
+            server_label="server-a",
+            server_url="http://a:3000",
+            require_approval="never",
+            authorization="token-a",
+        )
+        tool_b = InputToolMCP(
+            server_label="server-b",
+            server_url="http://b:3000",
+            require_approval="never",
+            authorization="token-b",
+        )
+        params = self._make_params([tool_a, tool_b])
+        dumped = params.model_dump(exclude_none=True)
+
+        assert dumped["tools"][0]["authorization"] == "token-a"
+        assert dumped["tools"][1]["authorization"] == "token-b"
+
+    def test_exclude_changing_tool_list_shape_skips_reinjection(self) -> None:
+        """Test that exclude removing tool indices does not mis-assign authorization."""
+        tool_a = InputToolMCP(
+            server_label="server-a",
+            server_url="http://a:3000",
+            require_approval="never",
+            authorization="token-a",
+        )
+        tool_b = InputToolMCP(
+            server_label="server-b",
+            server_url="http://b:3000",
+            require_approval="never",
+            authorization="token-b",
+        )
+        params = self._make_params([tool_a, tool_b])
+        dumped = params.model_dump(exclude={"tools": {0}})
+        assert len(dumped["tools"]) == 1
+        assert dumped["tools"][0]["server_label"] == "server-b"
+        assert "authorization" not in dumped["tools"][0]
+
+    def test_no_tools_does_not_error(self) -> None:
+        """Test that model_dump() works when tools is None."""
+        params = ResponsesApiParams(
+            input="test",
+            model="provider/model",
+            conversation="conv-id",
+            store=False,
+            stream=False,
+            tools=None,
+        )
+        dumped = params.model_dump(exclude_none=True)
+        assert "tools" not in dumped

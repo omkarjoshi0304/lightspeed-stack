@@ -5,7 +5,6 @@
 import base64
 import json
 from typing import Optional
-from unittest.mock import Mock
 
 import pytest
 from fastapi import HTTPException, Request
@@ -95,12 +94,15 @@ def create_auth_header(identity_data: dict) -> str:
     return base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
 
 
-def create_request_with_header(header_value: Optional[str]) -> Mock:
+def create_request_with_header(
+    mocker: MockerFixture, header_value: Optional[str]
+) -> Request:
     """Helper to create mock Request with x-rh-identity header.
 
     Create a mock FastAPI Request with an `x-rh-identity` header for tests.
 
     Parameters:
+        mocker: Pytest-mock fixture for creating mocks.
         header_value (Optional[str]): Base64-encoded identity header value to
         set. If `None` or empty, the returned request will have no headers.
 
@@ -109,10 +111,10 @@ def create_request_with_header(header_value: Optional[str]) -> Mock:
         `{"x-rh-identity": header_value}` when a value is provided, or an empty
         dict otherwise.
     """
-    request = Mock(spec=Request)
+    request = mocker.Mock(spec=Request)
     request.headers = {"x-rh-identity": header_value} if header_value else {}
-    request.url = Mock(path="/test")
-    request.state = Mock()
+    request.url = mocker.Mock(path="/test")
+    request.state = mocker.Mock()
     return request
 
 
@@ -317,11 +319,13 @@ class TestRHIdentityAuthDependency:
     """Test suite for RHIdentityAuthDependency class."""
 
     @pytest.mark.asyncio
-    async def test_user_authentication_success(self, user_identity_data: dict) -> None:
+    async def test_user_authentication_success(
+        self, mocker: MockerFixture, user_identity_data: dict
+    ) -> None:
         """Test successful User authentication."""
         auth_dep = RHIdentityAuthDependency()
         header_value = create_auth_header(user_identity_data)
-        request = create_request_with_header(header_value)
+        request = create_request_with_header(mocker, header_value)
 
         user_id, username, _, _ = await auth_dep(request)
 
@@ -330,12 +334,12 @@ class TestRHIdentityAuthDependency:
 
     @pytest.mark.asyncio
     async def test_system_authentication_success(
-        self, system_identity_data: dict
+        self, mocker: MockerFixture, system_identity_data: dict
     ) -> None:
         """Test successful System authentication."""
         auth_dep = RHIdentityAuthDependency()
         header_value = create_auth_header(system_identity_data)
-        request = create_request_with_header(header_value)
+        request = create_request_with_header(mocker, header_value)
 
         user_id, username, skip_check, token = await auth_dep(request)
 
@@ -353,13 +357,17 @@ class TestRHIdentityAuthDependency:
         ],
     )
     async def test_rh_identity_stored_in_request_state(
-        self, fixture_name: str, expected_user_id: str, request: pytest.FixtureRequest
+        self,
+        mocker: MockerFixture,
+        fixture_name: str,
+        expected_user_id: str,
+        request: pytest.FixtureRequest,
     ) -> None:
         """Test RH Identity data is stored in request.state for downstream access."""
         identity_data = request.getfixturevalue(fixture_name)
         auth_dep = RHIdentityAuthDependency()
         header_value = create_auth_header(identity_data)
-        mock_request = create_request_with_header(header_value)
+        mock_request = create_request_with_header(mocker, header_value)
 
         await auth_dep(mock_request)
 
@@ -370,10 +378,10 @@ class TestRHIdentityAuthDependency:
         assert rh_identity.get_org_id() == "321"
 
     @pytest.mark.asyncio
-    async def test_missing_header(self) -> None:
+    async def test_missing_header(self, mocker: MockerFixture) -> None:
         """Test authentication fails when header is missing."""
         auth_dep = RHIdentityAuthDependency()
-        request = create_request_with_header(None)
+        request = create_request_with_header(mocker, None)
 
         with pytest.raises(HTTPException) as exc_info:
             await auth_dep(request)
@@ -382,10 +390,10 @@ class TestRHIdentityAuthDependency:
         assert "Missing x-rh-identity header" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
-    async def test_invalid_base64(self) -> None:
+    async def test_invalid_base64(self, mocker: MockerFixture) -> None:
         """Test authentication fails with invalid base64."""
         auth_dep = RHIdentityAuthDependency()
-        request = create_request_with_header("not-valid-base64!!!")
+        request = create_request_with_header(mocker, "not-valid-base64!!!")
 
         with pytest.raises(HTTPException) as exc_info:
             await auth_dep(request)
@@ -394,11 +402,11 @@ class TestRHIdentityAuthDependency:
         assert "Invalid base64 encoding" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
-    async def test_invalid_json(self) -> None:
+    async def test_invalid_json(self, mocker: MockerFixture) -> None:
         """Test authentication fails with invalid JSON."""
         auth_dep = RHIdentityAuthDependency()
         invalid_json = base64.b64encode(b"not valid json").decode("utf-8")
-        request = create_request_with_header(invalid_json)
+        request = create_request_with_header(mocker, invalid_json)
 
         with pytest.raises(HTTPException) as exc_info:
             await auth_dep(request)
@@ -425,8 +433,9 @@ class TestRHIdentityAuthDependency:
             ),  # Multiple with one missing
         ],
     )
-    async def test_entitlement_validation(
+    async def test_entitlement_validation(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
+        mocker: MockerFixture,
         user_identity_data: dict,
         required_entitlements: Optional[list[str]],
         should_raise: bool,
@@ -435,7 +444,7 @@ class TestRHIdentityAuthDependency:
         """Test authentication with various entitlement requirements."""
         auth_dep = RHIdentityAuthDependency(required_entitlements=required_entitlements)
         header_value = create_auth_header(user_identity_data)
-        request = create_request_with_header(header_value)
+        request = create_request_with_header(mocker, header_value)
 
         if should_raise:
             with pytest.raises(HTTPException) as exc_info:
@@ -449,14 +458,16 @@ class TestRHIdentityAuthDependency:
             assert username == "user@redhat.com"
 
     @pytest.mark.asyncio
-    async def test_no_entitlement_data(self, user_identity_data: dict) -> None:
+    async def test_no_entitlement_data(
+        self, mocker: MockerFixture, user_identity_data: dict
+    ) -> None:
         """Test authentication succeeds when no entitlements are present in identity data."""
         user_identity_data_no_entitlements = user_identity_data.copy()
         user_identity_data_no_entitlements["entitlements"] = {}
 
         auth_dep = RHIdentityAuthDependency()
         header_value = create_auth_header(user_identity_data_no_entitlements)
-        request = create_request_with_header(header_value)
+        request = create_request_with_header(mocker, header_value)
 
         user_id, username, _, _ = await auth_dep(request)
         assert user_id == "abc123"

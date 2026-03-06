@@ -583,6 +583,11 @@
             "title": "Disable Query System Prompt",
             "type": "boolean"
           },
+          "disable_shield_ids_override": {
+            "default": false,
+            "title": "Disable Shield Ids Override",
+            "type": "boolean"
+          },
           "system_prompt_path": {
             "type": "string",
             "nullable": true,
@@ -866,9 +871,17 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "Headers to send to the MCP server. The map contains the header name and the path to a file containing the header value (secret). There are 2 special cases: 1. Usage of the kubernetes token in the header. To specify this use a string 'kubernetes' instead of the file path. 2. Usage of the client provided token in the header. To specify this use a string 'client' instead of the file path.",
+            "description": "Headers to send to the MCP server. The map contains the header name and the path to a file containing the header value (secret). There are 3 special cases: 1. Usage of the kubernetes token in the header. To specify this use a string 'kubernetes' instead of the file path. 2. Usage of the client-provided token in the header. To specify this use a string 'client' instead of the file path. 3. Usage of the oauth token in the header. To specify this use a string 'oauth' instead of the file path. ",
             "title": "Authorization headers",
             "type": "object"
+          },
+          "headers": {
+            "description": "List of HTTP header names to automatically forward from the incoming request to this MCP server. Headers listed here are extracted from the original client request and included when calling the MCP server. This is useful when infrastructure components (e.g. API gateways) inject headers that MCP servers need, such as x-rh-identity in HCC. Header matching is case-insensitive. These headers are additive with authorization_headers and MCP-HEADERS.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Propagated headers",
+            "type": "array"
           },
           "timeout": {
             "type": "integer",

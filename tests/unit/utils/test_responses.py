@@ -11,21 +11,25 @@ from fastapi import HTTPException
 from llama_stack_api.openai_responses import (
     OpenAIResponseInputToolFileSearch as InputToolFileSearch,
     OpenAIResponseInputToolMCP as InputToolMCP,
+    OpenAIResponseMCPApprovalRequest as MCPApprovalRequest,
+    OpenAIResponseMCPApprovalResponse as MCPApprovalResponse,
     OpenAIResponseOutputMessageFileSearchToolCall as FileSearchCall,
     OpenAIResponseOutputMessageFunctionToolCall as FunctionCall,
     OpenAIResponseOutputMessageMCPCall as MCPCall,
     OpenAIResponseOutputMessageMCPListTools as MCPListTools,
-    OpenAIResponseMCPApprovalRequest as MCPApprovalRequest,
-    OpenAIResponseMCPApprovalResponse as MCPApprovalResponse,
     OpenAIResponseOutputMessageWebSearchToolCall as WebSearchCall,
 )
 from llama_stack_client import APIConnectionError, APIStatusError, AsyncLlamaStackClient
 from pydantic import AnyUrl
 from pytest_mock import MockerFixture
 
-from models.config import ModelContextProtocolServer
+import constants
+from models.config import ByokRag, ModelContextProtocolServer
 from models.requests import QueryRequest
 from utils.responses import (
+    _build_chunk_attributes,
+    _increment_llm_call_metric,
+    _resolve_source_for_result,
     build_mcp_tool_call_from_arguments_done,
     build_tool_call_summary,
     build_tool_result_from_mcp_output_item_done,
@@ -37,13 +41,12 @@ from utils.responses import (
     get_mcp_tools,
     get_rag_tools,
     get_topic_summary,
+    get_vector_store_ids,
     parse_arguments_string,
     parse_referenced_documents,
     prepare_responses_params,
     prepare_tools,
-    _build_chunk_attributes,
-    _increment_llm_call_metric,
-    _resolve_source_for_result,
+    resolve_vector_store_ids,
 )
 from utils.types import RAGChunk
 
@@ -333,8 +336,8 @@ class TestGetRAGTools:
     """Test cases for get_rag_tools utility function."""
 
     def test_get_rag_tools_empty_list(self) -> None:
-        """Test get_rag_tools returns None for empty list."""
-        assert get_rag_tools([]) is None
+        """Test get_rag_tools returns empty list for empty vector store IDs."""
+        assert not get_rag_tools([])
 
     def test_get_rag_tools_with_vector_stores(self) -> None:
         """Test get_rag_tools returns correct tool format for vector stores."""
@@ -427,7 +430,7 @@ class TestGetMCPTools:
     async def test_get_mcp_tools_client_auth_no_mcp_headers(
         self, mocker: MockerFixture
     ) -> None:
-        """Test get_mcp_tools skips server when mcp_headers is None and server requires client auth."""  # noqa: E501
+        """Test get_mcp_tools skips server when mcp_headers is None and server requires client auth."""
         servers = [
             ModelContextProtocolServer(
                 name="client-auth-server",
@@ -633,6 +636,7 @@ class TestGetMCPTools:
                 name="rbac",
                 url="http://rbac:8080",
                 headers=["x-rh-identity", "x-request-id"],
+                provider_id="provider",
             ),
         ]
         mock_config = mocker.Mock()
@@ -667,6 +671,7 @@ class TestGetMCPTools:
                 url="http://rbac:8080",
                 authorization_headers={"Authorization": str(secret_file)},
                 headers=["Authorization", "x-rh-identity"],
+                provider_id="provider",
             ),
         ]
         mock_config = mocker.Mock()
@@ -697,6 +702,7 @@ class TestGetMCPTools:
                 name="rbac",
                 url="http://rbac:8080",
                 headers=["x-rh-identity", "x-missing"],
+                provider_id="provider",
             ),
         ]
         mock_config = mocker.Mock()
@@ -722,6 +728,7 @@ class TestGetMCPTools:
                 name="rbac",
                 url="http://rbac:8080",
                 headers=["x-rh-identity"],
+                provider_id="provider",
             ),
         ]
         mock_config = mocker.Mock()
@@ -743,6 +750,7 @@ class TestGetMCPTools:
                 url="http://server1:8080",
                 authorization_headers={"Authorization": "client"},
                 headers=["x-rh-identity"],
+                provider_id="provider",
             ),
         ]
         mock_config = mocker.Mock()
@@ -773,6 +781,7 @@ class TestGetMCPTools:
                 url="http://rbac:8080",
                 authorization_headers={"Authorization": str(secret_file)},
                 headers=["authorization", "x-rh-identity"],
+                provider_id="provider",
             ),
         ]
         mock_config = mocker.Mock()
@@ -955,7 +964,7 @@ class TestPrepareTools:
 
     @pytest.mark.asyncio
     async def test_prepare_tools_api_status_error(self, mocker: MockerFixture) -> None:
-        """Test prepare_tools raises HTTPException on API status error when fetching vector stores."""  # noqa: E501
+        """Test prepare_tools raises HTTPException on API status error when fetching vector stores."""
         mock_client = mocker.AsyncMock()
         mock_client.vector_stores.list = mocker.AsyncMock(
             side_effect=APIStatusError(
@@ -992,6 +1001,133 @@ class TestPrepareTools:
         assert result is None
         # Verify that vector_stores.list was not called
         mock_client.vector_stores.list.assert_not_called()
+
+
+class TestResolveVectorStoreIds:
+    """Tests for resolve_vector_store_ids function."""
+
+    @staticmethod
+    def _make_byok_rag(rag_id: str, vector_db_id: str) -> ByokRag:
+        """Create a ByokRag instance for testing."""
+        return ByokRag(
+            rag_id=rag_id,
+            vector_db_id=vector_db_id,
+            db_path="tests/configuration/rag.txt",
+        )
+
+    def test_translates_customer_facing_ids_to_internal(self) -> None:
+        """Test that customer-facing rag_ids are translated to vector_db_ids."""
+        byok_rags = [
+            self._make_byok_rag("ocp_docs", "vs-001"),
+            self._make_byok_rag("knowledge_base", "vs-002"),
+        ]
+        result = resolve_vector_store_ids(["ocp_docs", "knowledge_base"], byok_rags)
+        assert result == ["vs-001", "vs-002"]
+
+    def test_passes_through_unknown_ids(self) -> None:
+        """Test that IDs not matching any rag_id are passed through unchanged."""
+        byok_rags = [self._make_byok_rag("ocp_docs", "vs-001")]
+        result = resolve_vector_store_ids(["unknown-id"], byok_rags)
+        assert result == ["unknown-id"]
+
+    def test_mixed_known_and_unknown_ids(self) -> None:
+        """Test mix of customer-facing IDs and raw llama-stack IDs."""
+        byok_rags = [self._make_byok_rag("ocp_docs", "vs-001")]
+        result = resolve_vector_store_ids(["ocp_docs", "already-internal"], byok_rags)
+        assert result == ["vs-001", "already-internal"]
+
+    def test_empty_vector_store_ids(self) -> None:
+        """Test that empty input returns empty output."""
+        byok_rags = [self._make_byok_rag("ocp_docs", "vs-001")]
+        result = resolve_vector_store_ids([], byok_rags)
+        assert result == []
+
+    def test_empty_byok_rags(self) -> None:
+        """Test that all IDs pass through when no BYOK RAGs are configured."""
+        result = resolve_vector_store_ids(["vs-001", "vs-002"], [])
+        assert result == ["vs-001", "vs-002"]
+
+    def test_preserves_order(self) -> None:
+        """Test that output order matches input order."""
+        byok_rags = [
+            self._make_byok_rag("b_rag", "vs-b"),
+            self._make_byok_rag("a_rag", "vs-a"),
+        ]
+        result = resolve_vector_store_ids(["a_rag", "b_rag"], byok_rags)
+        assert result == ["vs-a", "vs-b"]
+
+
+class TestPrepareToolsTranslatesVectorStoreIds:
+    """Tests that prepare_tools translates BYOK IDs before building RAG tools."""
+
+    @pytest.mark.asyncio
+    async def test_translates_byok_ids_in_prepare_tools(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that prepare_tools translates customer-facing IDs to internal IDs."""
+        mock_client = mocker.AsyncMock()
+        mocker.patch("utils.responses.get_mcp_tools", return_value=None)
+
+        # Configure BYOK RAG mapping
+        mock_byok_rag = mocker.Mock()
+        mock_byok_rag.rag_id = "ocp_docs"
+        mock_byok_rag.vector_db_id = "vs-001"
+        mock_config = mocker.Mock()
+        mock_config.configuration.byok_rag = [mock_byok_rag]
+        mocker.patch("utils.responses.configuration", mock_config)
+
+        result = await prepare_tools(mock_client, ["ocp_docs"], False, "token")
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].type == "file_search"
+        assert result[0].vector_store_ids == ["vs-001"]
+
+    @pytest.mark.asyncio
+    async def test_passes_through_unknown_ids_in_prepare_tools(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that prepare_tools passes through IDs not in BYOK config."""
+        mock_client = mocker.AsyncMock()
+        mocker.patch("utils.responses.get_mcp_tools", return_value=None)
+
+        # Configure empty BYOK RAG
+        mock_config = mocker.Mock()
+        mock_config.configuration.byok_rag = []
+        mocker.patch("utils.responses.configuration", mock_config)
+
+        result = await prepare_tools(mock_client, ["raw-internal-id"], False, "token")
+        assert result is not None
+        assert result[0].vector_store_ids == ["raw-internal-id"]
+
+    @pytest.mark.asyncio
+    async def test_does_not_translate_when_ids_fetched_from_llama_stack(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that IDs fetched from llama-stack (None path) are not translated."""
+        mock_client = mocker.AsyncMock()
+        mock_vector_store = mocker.Mock()
+        mock_vector_store.id = "vs-internal"
+        mock_vector_stores = mocker.Mock()
+        mock_vector_stores.data = [mock_vector_store]
+        mock_client.vector_stores.list = mocker.AsyncMock(
+            return_value=mock_vector_stores
+        )
+        mocker.patch("utils.responses.get_mcp_tools", return_value=None)
+
+        # Configure BYOK RAG whose rag_id matches the fetched ID so that
+        # accidental translation would change the result and fail the assertion
+        mock_byok_rag = mocker.Mock()
+        mock_byok_rag.rag_id = "vs-internal"
+        mock_byok_rag.vector_db_id = "vs-translated"
+        mock_config = mocker.Mock()
+        mock_config.configuration.byok_rag = [mock_byok_rag]
+        mock_config.configuration.rag.tool = None
+        mocker.patch("utils.responses.configuration", mock_config)
+
+        result = await prepare_tools(mock_client, None, False, "token")
+        assert result is not None
+        # The IDs from llama-stack should be used as-is (no BYOK translation on None path)
+        assert result[0].vector_store_ids == ["vs-internal"]
 
 
 class TestPrepareResponsesParams:
@@ -1065,7 +1201,7 @@ class TestPrepareResponsesParams:
     async def test_prepare_responses_params_connection_error_on_models(
         self, mocker: MockerFixture
     ) -> None:
-        """Test prepare_responses_params raises HTTPException on connection error when fetching models."""  # noqa: E501
+        """Test prepare_responses_params raises HTTPException on connection error when fetching models."""
         mock_client = mocker.AsyncMock()
         mock_client.models.list = mocker.AsyncMock(
             side_effect=APIConnectionError(
@@ -1086,7 +1222,7 @@ class TestPrepareResponsesParams:
     async def test_prepare_responses_params_connection_error_on_conversation(
         self, mocker: MockerFixture
     ) -> None:
-        """Test prepare_responses_params raises HTTPException on connection error when creating conversation."""  # noqa: E501
+        """Test prepare_responses_params raises HTTPException on connection error when creating conversation."""
         mock_client = mocker.AsyncMock()
         mock_model = mocker.Mock()
         mock_model.id = "provider1/model1"
@@ -1115,7 +1251,7 @@ class TestPrepareResponsesParams:
     async def test_prepare_responses_params_api_status_error_on_models(
         self, mocker: MockerFixture
     ) -> None:
-        """Test prepare_responses_params raises HTTPException on API status error when fetching models."""  # noqa: E501
+        """Test prepare_responses_params raises HTTPException on API status error when fetching models."""
         mock_client = mocker.AsyncMock()
         mock_client.models.list = mocker.AsyncMock(
             side_effect=APIStatusError(
@@ -1233,7 +1369,7 @@ class TestPrepareResponsesParams:
     async def test_prepare_responses_params_api_status_error_on_conversation(
         self, mocker: MockerFixture
     ) -> None:
-        """Test prepare_responses_params raises HTTPException on API status error when creating conversation."""  # noqa: E501
+        """Test prepare_responses_params raises HTTPException on API status error when creating conversation."""
         mock_client = mocker.AsyncMock()
         mock_model = mocker.Mock()
         mock_model.id = "provider1/model1"
@@ -2221,3 +2357,80 @@ class TestParseReferencedDocumentsWithSource:
 
         assert len(docs) == 1
         assert docs[0].source is None
+
+
+class TestGetVectorStoreIds:
+    """Tests for get_vector_store_ids utility function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_provided_ids_directly(self, mocker: MockerFixture) -> None:
+        """Test that provided vector_store_ids are returned without fetching."""
+        client_mock = mocker.AsyncMock()
+        result = await get_vector_store_ids(client_mock, ["vs1", "vs2"])
+        assert result == ["vs1", "vs2"]
+        client_mock.vector_stores.list.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetches_all_when_no_ids_provided(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that all vector stores are fetched when no IDs provided."""
+        mock_store1 = mocker.Mock()
+        mock_store1.id = "vs-fetched-1"
+        mock_store2 = mocker.Mock()
+        mock_store2.id = "vs-fetched-2"
+
+        mock_list_result = mocker.Mock()
+        mock_list_result.data = [mock_store1, mock_store2]
+
+        client_mock = mocker.AsyncMock()
+        client_mock.vector_stores.list.return_value = mock_list_result
+
+        result = await get_vector_store_ids(client_mock, None)
+        assert result == ["vs-fetched-1", "vs-fetched-2"]
+        client_mock.vector_stores.list.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_raises_on_connection_error(self, mocker: MockerFixture) -> None:
+        """Test that APIConnectionError raises HTTPException 503."""
+        client_mock = mocker.AsyncMock()
+        client_mock.vector_stores.list.side_effect = APIConnectionError.__new__(
+            APIConnectionError
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_vector_store_ids(client_mock, None)
+        assert exc_info.value.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_raises_on_api_status_error(self, mocker: MockerFixture) -> None:
+        """Test that APIStatusError raises HTTPException 500."""
+        mock_response = mocker.Mock()
+        mock_response.status_code = 500
+        mock_response.headers = {}
+        mock_response.text = "error"
+
+        client_mock = mocker.AsyncMock()
+        client_mock.vector_stores.list.side_effect = APIStatusError(
+            "error", response=mock_response, body=None
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_vector_store_ids(client_mock, None)
+        assert exc_info.value.status_code == 500
+
+
+class TestGetRAGToolsWithConfig:
+    """Tests for get_rag_tools with configuration checks."""
+
+    def test_returns_empty_when_no_vector_store_ids(self) -> None:
+        """Test get_rag_tools returns empty list when no vector store IDs are provided."""
+        # pylint: disable-next=use-implicit-booleaness-not-comparison
+        assert get_rag_tools([]) == []
+
+    def test_returns_tools_when_stores_provided(self) -> None:
+        """Test get_rag_tools returns tools when vector store IDs are provided."""
+        tools = get_rag_tools(["vs1"])
+        assert tools is not None
+        assert tools[0].type == constants.DEFAULT_RAG_TOOL
+        assert tools[0].vector_store_ids == ["vs1"]

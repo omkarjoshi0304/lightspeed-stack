@@ -1,9 +1,9 @@
 # Example llama-stack configuration for OpenAI inference + FAISS (RAG)
-# 
+#
 # Notes:
 # - You will need an OpenAI API key
 # - You can generate the vector index with the rag-content tool (https://github.com/lightspeed-core/rag-content)
-# 
+#
 version: 2
 
 apis:
@@ -17,7 +17,7 @@ apis:
 - scoring
 - tool_runtime
 - vector_io
-      
+
 benchmarks: []
 datasets: []
 image_name: starter
@@ -61,6 +61,9 @@ providers:
   - config: {} # Enable the RAG tool
     provider_id: rag-runtime
     provider_type: inline::rag-runtime
+  - config: {} # Enable the MCP tool
+    provider_id: model-context-protocol
+    provider_type: remote::model-context-protocol
   vector_io:
   - config: # Define the storage backend for RAG
       persistence:
@@ -144,7 +147,7 @@ registered_resources:
     provider_model_id: sentence-transformers/all-mpnet-base-v2
     metadata:
       embedding_dimension: 768
-  vector_stores: 
+  vector_stores:
   - embedding_dimension: 768
     embedding_model: sentence-transformers/nomic-ai/nomic-embed-text-v1.5
     provider_id: faiss

@@ -4,7 +4,6 @@
 # pylint: disable=protected-access
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -161,7 +160,7 @@ class TestConvertResponsesContentToA2AParts:
             "app.endpoints.a2a.extract_text_from_response_item",
             return_value="Hello, world!",
         )
-        mock_output_item = MagicMock()
+        mock_output_item = mocker.MagicMock()
         result = _convert_responses_content_to_a2a_parts([mock_output_item])
         assert len(result) == 1
         assert result[0].root is not None
@@ -175,8 +174,8 @@ class TestConvertResponsesContentToA2AParts:
         )
         extract_mock.side_effect = ["First", "Second"]
 
-        mock_item1 = MagicMock()
-        mock_item2 = MagicMock()
+        mock_item1 = mocker.MagicMock()
+        mock_item2 = mocker.MagicMock()
 
         result = _convert_responses_content_to_a2a_parts([mock_item1, mock_item2])
         assert len(result) == 2
@@ -194,7 +193,7 @@ class TestConvertResponsesContentToA2AParts:
         )
         extract_mock.side_effect = ["Valid text", None, "Another valid"]
 
-        mock_items = [MagicMock(), MagicMock(), MagicMock()]
+        mock_items = [mocker.MagicMock(), mocker.MagicMock(), mocker.MagicMock()]
 
         result = _convert_responses_content_to_a2a_parts(mock_items)
         assert len(result) == 2
@@ -470,14 +469,16 @@ class TestA2AAgentExecutor:
         assert executor.mcp_headers == {}
 
     @pytest.mark.asyncio
-    async def test_execute_without_message_raises_error(self) -> None:
+    async def test_execute_without_message_raises_error(
+        self, mocker: MockerFixture
+    ) -> None:
         """Test that execute raises error when message is missing."""
         executor = A2AAgentExecutor(auth_token="test-token")
 
-        context = MagicMock(spec=RequestContext)
+        context = mocker.MagicMock(spec=RequestContext)
         context.message = None
 
-        event_queue = AsyncMock(spec=EventQueue)
+        event_queue = mocker.AsyncMock(spec=EventQueue)
 
         with pytest.raises(ValueError, match="A2A request must have a message"):
             await executor.execute(context, event_queue)
@@ -492,12 +493,12 @@ class TestA2AAgentExecutor:
         executor = A2AAgentExecutor(auth_token="test-token")
 
         # Mock the context with a mock message
-        mock_message = MagicMock()
+        mock_message = mocker.MagicMock()
         mock_message.role = "user"
         mock_message.parts = [Part(root=TextPart(text="Hello"))]
         mock_message.metadata = {}
 
-        context = MagicMock(spec=RequestContext)
+        context = mocker.MagicMock(spec=RequestContext)
         context.message = mock_message
         context.current_task = None
         context.task_id = None
@@ -505,10 +506,10 @@ class TestA2AAgentExecutor:
         context.get_user_input.return_value = "Hello"
 
         # Mock event queue
-        event_queue = AsyncMock(spec=EventQueue)
+        event_queue = mocker.AsyncMock(spec=EventQueue)
 
         # Mock new_task to return a mock Task
-        mock_task = MagicMock()
+        mock_task = mocker.MagicMock()
         mock_task.id = "test-task-id"
         mock_task.context_id = "test-context-id"
         mocker.patch("app.endpoints.a2a.new_task", return_value=mock_task)
@@ -517,7 +518,7 @@ class TestA2AAgentExecutor:
         mocker.patch.object(
             executor,
             "_process_task_streaming",
-            new_callable=AsyncMock,
+            new_callable=mocker.AsyncMock,
         )
 
         await executor.execute(context, event_queue)
@@ -540,12 +541,12 @@ class TestA2AAgentExecutor:
         executor = A2AAgentExecutor(auth_token="test-token")
 
         # Mock the context with empty task_id and context_id (first-turn scenario)
-        mock_message = MagicMock()
+        mock_message = mocker.MagicMock()
         mock_message.role = "user"
         mock_message.parts = [Part(root=TextPart(text="Hello"))]
         mock_message.metadata = {}
 
-        context = MagicMock(spec=RequestContext)
+        context = mocker.MagicMock(spec=RequestContext)
         context.message = mock_message
         context.current_task = None
         context.task_id = None  # Empty in context object
@@ -553,10 +554,10 @@ class TestA2AAgentExecutor:
         context.get_user_input.return_value = "Hello"
 
         # Mock event queue
-        event_queue = AsyncMock(spec=EventQueue)
+        event_queue = mocker.AsyncMock(spec=EventQueue)
 
         # Mock new_task to return a task with specific IDs
-        mock_task = MagicMock()
+        mock_task = mocker.MagicMock()
         mock_task.id = "computed-task-id-123"
         mock_task.context_id = "computed-context-id-456"
         mocker.patch("app.endpoints.a2a.new_task", return_value=mock_task)
@@ -565,7 +566,7 @@ class TestA2AAgentExecutor:
         mock_process_streaming = mocker.patch.object(
             executor,
             "_process_task_streaming",
-            new_callable=AsyncMock,
+            new_callable=mocker.AsyncMock,
         )
 
         await executor.execute(context, event_queue)
@@ -591,20 +592,20 @@ class TestA2AAgentExecutor:
         executor = A2AAgentExecutor(auth_token="test-token")
 
         # Mock the context with a mock message
-        mock_message = MagicMock()
+        mock_message = mocker.MagicMock()
         mock_message.role = "user"
         mock_message.parts = [Part(root=TextPart(text="Hello"))]
         mock_message.metadata = {}
 
-        context = MagicMock(spec=RequestContext)
+        context = mocker.MagicMock(spec=RequestContext)
         context.message = mock_message
-        context.current_task = MagicMock()
+        context.current_task = mocker.MagicMock()
         context.task_id = "task-123"
         context.context_id = "ctx-456"
         context.get_user_input.return_value = "Hello"
 
         # Mock event queue
-        event_queue = AsyncMock(spec=EventQueue)
+        event_queue = mocker.AsyncMock(spec=EventQueue)
 
         # Mock the streaming process to raise an error
         mocker.patch.object(
@@ -637,23 +638,23 @@ class TestA2AAgentExecutor:
         executor = A2AAgentExecutor(auth_token="test-token")
 
         # Mock the context with no input
-        mock_message = MagicMock()
+        mock_message = mocker.MagicMock()
         mock_message.role = "user"
         mock_message.parts = []
         mock_message.metadata = {}
 
-        context = MagicMock(spec=RequestContext)
+        context = mocker.MagicMock(spec=RequestContext)
         context.task_id = "task-123"
         context.context_id = "ctx-456"
         context.message = mock_message
         context.get_user_input.return_value = ""
 
         # Mock event queue
-        event_queue = AsyncMock(spec=EventQueue)
+        event_queue = mocker.AsyncMock(spec=EventQueue)
 
         # Create task updater mock
-        task_updater = MagicMock()
-        task_updater.update_status = AsyncMock()
+        task_updater = mocker.MagicMock()
+        task_updater.update_status = mocker.AsyncMock()
         task_updater.event_queue = event_queue
 
         await executor._process_task_streaming(
@@ -675,34 +676,34 @@ class TestA2AAgentExecutor:
         executor = A2AAgentExecutor(auth_token="test-token")
 
         # Mock the context with valid input
-        mock_message = MagicMock()
+        mock_message = mocker.MagicMock()
         mock_message.role = "user"
         mock_message.parts = [Part(root=TextPart(text="Hello"))]
         mock_message.metadata = {}
 
-        context = MagicMock(spec=RequestContext)
+        context = mocker.MagicMock(spec=RequestContext)
         context.task_id = "task-123"
         context.context_id = "ctx-456"
         context.message = mock_message
         context.get_user_input.return_value = "Hello"
 
         # Mock event queue
-        event_queue = AsyncMock(spec=EventQueue)
+        event_queue = mocker.AsyncMock(spec=EventQueue)
 
         # Create task updater mock
-        task_updater = MagicMock()
-        task_updater.update_status = AsyncMock()
+        task_updater = mocker.MagicMock()
+        task_updater.update_status = mocker.AsyncMock()
         task_updater.event_queue = event_queue
 
         # Mock the context store
-        mock_context_store = AsyncMock()
+        mock_context_store = mocker.AsyncMock()
         mock_context_store.get.return_value = None
         mocker.patch(
             "app.endpoints.a2a._get_context_store", return_value=mock_context_store
         )
 
         # Mock the client to raise APIConnectionError on models.list()
-        mock_client = AsyncMock()
+        mock_client = mocker.AsyncMock()
         # Create a mock httpx.Request for APIConnectionError
         mock_request = httpx.Request("GET", "http://test-llama-stack/models")
         mock_client.models.list.side_effect = APIConnectionError(
@@ -733,35 +734,35 @@ class TestA2AAgentExecutor:
         executor = A2AAgentExecutor(auth_token="test-token")
 
         # Mock the context with valid input
-        mock_message = MagicMock()
+        mock_message = mocker.MagicMock()
         mock_message.role = "user"
         mock_message.parts = [Part(root=TextPart(text="Hello"))]
         mock_message.metadata = {}
 
-        context = MagicMock(spec=RequestContext)
+        context = mocker.MagicMock(spec=RequestContext)
         context.task_id = "task-123"
         context.context_id = "ctx-456"
         context.message = mock_message
         context.get_user_input.return_value = "Hello"
 
         # Mock event queue
-        event_queue = AsyncMock(spec=EventQueue)
+        event_queue = mocker.AsyncMock(spec=EventQueue)
 
         # Create task updater mock
-        task_updater = MagicMock()
-        task_updater.update_status = AsyncMock()
+        task_updater = mocker.MagicMock()
+        task_updater.update_status = mocker.AsyncMock()
         task_updater.event_queue = event_queue
 
         # Mock the context store
-        mock_context_store = AsyncMock()
+        mock_context_store = mocker.AsyncMock()
         mock_context_store.get.return_value = None
         mocker.patch(
             "app.endpoints.a2a._get_context_store", return_value=mock_context_store
         )
 
         # Mock the client to succeed on models.list()
-        mock_client = AsyncMock()
-        mock_models = [MagicMock()]  # Return a list of models
+        mock_client = mocker.AsyncMock()
+        mock_models = [mocker.MagicMock()]  # Return a list of models
         mock_client.models.list = mocker.AsyncMock(return_value=mock_models)
 
         # Mock responses.create to raise APIConnectionError
@@ -801,12 +802,12 @@ class TestA2AAgentExecutor:
         assert "Unable to connect to Llama Stack backend service" in str(error_message)
 
     @pytest.mark.asyncio
-    async def test_cancel_raises_not_implemented(self) -> None:
+    async def test_cancel_raises_not_implemented(self, mocker: MockerFixture) -> None:
         """Test that cancel raises NotImplementedError."""
         executor = A2AAgentExecutor(auth_token="test-token")
 
-        context = MagicMock(spec=RequestContext)
-        event_queue = AsyncMock(spec=EventQueue)
+        context = mocker.MagicMock(spec=RequestContext)
+        event_queue = mocker.AsyncMock(spec=EventQueue)
 
         with pytest.raises(NotImplementedError):
             await executor.cancel(context, event_queue)

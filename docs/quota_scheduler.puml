@@ -1,0 +1,30 @@
+@startuml
+skin rose
+
+participant App as "Application Startup"
+participant Sched as "quota_scheduler()"
+participant DB as "Database"
+participant Revoke as "quota_revocation()"
+    
+App->>Sched: start_quota_scheduler(config)
+Sched->>Sched: Spawn daemon thread
+Sched->>DB: connect(config)
+DB-->>Sched: connection
+Sched->>DB: init_tables(connection)
+DB-->>Sched: quota_limits table ready
+
+loop Infinite Loop (every period)
+    Sched->>Sched: Select limiter config
+    Sched->>Revoke: quota_revocation(connection, limiter)
+    Revoke->>Revoke: get_subject_id(limiter_type)
+    alt Reset quota needed
+        Revoke->>DB: reset_quota(...)
+    else Increase quota needed
+        Revoke->>DB: increase_quota(...)
+    end
+    DB-->>Revoke: rows updated
+    Revoke-->>Sched: complete
+    Sched->>Sched: Sleep for period
+end
+
+@enduml

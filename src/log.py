@@ -7,9 +7,10 @@ import sys
 from rich.logging import RichHandler
 
 from constants import (
-    LIGHTSPEED_STACK_LOG_LEVEL_ENV_VAR,
-    DEFAULT_LOG_LEVEL,
     DEFAULT_LOG_FORMAT,
+    DEFAULT_LOG_LEVEL,
+    LIGHTSPEED_STACK_DISABLE_RICH_HANDLER_ENV_VAR,
+    LIGHTSPEED_STACK_LOG_LEVEL_ENV_VAR,
 )
 
 
@@ -49,18 +50,23 @@ def resolve_log_level() -> int:
 
 def create_log_handler() -> logging.Handler:
     """
-    Create and return a configured log handler based on TTY availability.
+    Create and return a configured log handler based on TTY availability and environment settings.
 
-    If stderr is connected to a terminal (TTY), returns a RichHandler for
-    rich-formatted console output. Otherwise, returns a StreamHandler with
+    If LIGHTSPEED_STACK_DISABLE_RICH_HANDLER is set to any non-empty value,
+    returns a StreamHandler with plain-text formatting. Otherwise, if stderr
+    is connected to a terminal (TTY), returns a RichHandler for rich-formatted
+    console output. If neither condition is met, returns a StreamHandler with
     plain-text formatting suitable for non-TTY environments (e.g., containers).
-
-    Parameters:
-        None
 
     Returns:
         logging.Handler: A configured handler instance (RichHandler or StreamHandler).
     """
+    # Check if RichHandler is explicitly disabled via environment variable
+    if os.environ.get(LIGHTSPEED_STACK_DISABLE_RICH_HANDLER_ENV_VAR):
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(DEFAULT_LOG_FORMAT))
+        return handler
+
     if sys.stderr.isatty():
         # RichHandler's columnar layout assumes a real terminal.
         # RichHandler handles its own formatting, so no formatter is set.

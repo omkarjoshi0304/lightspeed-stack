@@ -3,8 +3,7 @@
 # pylint: disable=protected-access
 
 from pathlib import Path
-from typing import Generator
-from unittest.mock import PropertyMock
+from typing import Any, Generator
 
 import pytest
 from pytest_mock import MockerFixture
@@ -15,6 +14,16 @@ from a2a_storage import A2AStorageFactory
 from a2a_storage.in_memory_context_store import InMemoryA2AContextStore
 from a2a_storage.sqlite_context_store import SQLiteA2AContextStore
 from models.config import A2AStateConfiguration, SQLiteDatabaseConfiguration
+
+
+class _FakeProperty:  # pylint: disable=too-few-public-methods
+    """Descriptor that returns a fixed value (like PropertyMock)."""
+
+    def __init__(self, value: Any) -> None:
+        self._value = value
+
+    def __get__(self, obj: Any, owner: Any = None) -> Any:
+        return self._value
 
 
 class TestA2AStorageFactory:
@@ -127,12 +136,11 @@ class TestA2AStorageFactory:
         """Test that an invalid storage type raises ValueError."""
         config = A2AStateConfiguration()
 
-        # Mock the storage_type property to return an invalid value
+        # Replace property on class so config.storage_type returns "invalid"
         mocker.patch.object(
             A2AStateConfiguration,
             "storage_type",
-            new_callable=PropertyMock,
-            return_value="invalid",
+            _FakeProperty("invalid"),
         )
         with pytest.raises(ValueError, match="Unknown A2A state type"):
             await A2AStorageFactory.create_task_store(config)
@@ -144,12 +152,11 @@ class TestA2AStorageFactory:
         """Test that SQLite storage type without config raises ValueError."""
         config = A2AStateConfiguration()
 
-        # Mock to simulate misconfiguration
+        # Replace property on class so config.storage_type returns "sqlite"
         mocker.patch.object(
             A2AStateConfiguration,
             "storage_type",
-            new_callable=PropertyMock,
-            return_value="sqlite",
+            _FakeProperty("sqlite"),
         )
         with pytest.raises(ValueError, match="SQLite configuration required"):
             await A2AStorageFactory.create_task_store(config)
@@ -161,12 +168,11 @@ class TestA2AStorageFactory:
         """Test that PostgreSQL storage type without config raises ValueError."""
         config = A2AStateConfiguration()
 
-        # Mock to simulate misconfiguration
+        # Replace property on class so config.storage_type returns "postgres"
         mocker.patch.object(
             A2AStateConfiguration,
             "storage_type",
-            new_callable=PropertyMock,
-            return_value="postgres",
+            _FakeProperty("postgres"),
         )
         with pytest.raises(ValueError, match="PostgreSQL configuration required"):
             await A2AStorageFactory.create_task_store(config)

@@ -22,9 +22,15 @@ providers:
   - provider_id: ollama
     provider_type: remote::ollama
     config:
+<<<<<<< HEAD
       url: http://localhost:11434
   - config: {}
     provider_id: sentence-transformers
+=======
+      api_key: ${env.OPENAI_API_KEY}
+      allowed_models: ["${env.E2E_OPENAI_MODEL:=gpt-4o-mini}"]
+  - provider_id: sentence-transformers
+>>>>>>> refs/remotes/origin/main
     provider_type: inline::sentence-transformers
   files:
   - config:
@@ -58,12 +64,15 @@ providers:
     provider_type: remote::model-context-protocol
     config: {}
   vector_io:
+<<<<<<< HEAD
   - provider_id: os-docs
     provider_type: inline::faiss
     config:
       persistence:
         namespace: vector_io::faiss
         backend: kv_rag
+=======
+>>>>>>> refs/remotes/origin/main
   - config:
       persistence:
         namespace: vector_io::faiss
@@ -138,6 +147,7 @@ storage:
       namespace: prompts
       backend: kv_default
 registered_resources:
+<<<<<<< HEAD
   models:
   - model_id: all-mpnet-base-v2
     model_type: embedding
@@ -172,16 +182,30 @@ registered_resources:
     provider_id: os-docs
     embedding_model: sentence-transformers/all-mpnet-base-v2
     embedding_dimension: 768
+=======
+  models: []
+  shields:
+  - shield_id: llama-guard
+    provider_id: llama-guard
+    provider_shield_id: openai/gpt-4o-mini
+  vector_stores: []
+>>>>>>> refs/remotes/origin/main
   datasets: []
   scoring_fns: []
   benchmarks: []
   tool_groups:
   - toolgroup_id: builtin::rag # Register the RAG tool
     provider_id: rag-runtime
+<<<<<<< HEAD
   - toolgroup_id: rhos-mcps-openstack # MCP server for OpenStack
     provider_id: model-context-protocol
     mcp_endpoint:
       uri: http://localhost:3000/openstack
+=======
+# REQUIRED: This section is necessary for file_search tool calls to work.
+# Without it, llama-stack's rag-runtime silently fails all file_search operations
+# with no error logged.
+>>>>>>> refs/remotes/origin/main
 vector_stores:
   default_provider_id: faiss
   default_embedding_model: # Define the default embedding model for RAG

@@ -93,6 +93,7 @@ def check_tool_structure(context: Context, provider_name: str) -> None:
     response_json = context.response.json()
     assert response_json is not None, "Response is not valid JSON"
 
+    assert context.text is not None
     expected_json = json.loads(context.text)
 
     assert "tools" in response_json, "Response missing 'tools' field"

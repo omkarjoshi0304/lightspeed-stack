@@ -67,6 +67,8 @@ dependencies = [
     "azure-core>=1.38.0",
     "azure-identity>=1.21.0",
     "pyasn1>=0.6.2",
+    # Used for system prompt template variable rendering
+    "jinja2>=3.1.0",
 ]
 
 
@@ -158,7 +160,6 @@ llslibdev = [
     "sentence-transformers>=5.0.0",
     # API vector_io: inline::faiss, inline::sqlite-vec, remote::pgvector
     "faiss-cpu>=1.11.0",
-    "sqlite-vec>=0.1.6",
     "chardet>=5.2.0",
     "psycopg2-binary>=2.9.10",
     # API scoring: inline::basic
@@ -221,8 +222,12 @@ disable = ["R0801"]
 [tool.ruff]
 extend-exclude = ["tests/profiles/syntax_error.py"]
 
-[tool.ruff.lint.flake8-tidy-imports]
-banned-api = { "unittest" = { msg = "use pytest instead of unittest" }, "unittest.mock" = { msg = "use pytest-mock instead of unittest.mock" } }
+[tool.ruff.lint]
+extend-select = ["TID251", "UP006", "RUF100"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+unittest = { msg = "use pytest instead of unittest" }
+"unittest.mock" = { msg = "use pytest-mock instead of unittest.mock" }
 
 [tool.mypy]
 explicit_package_bases = true

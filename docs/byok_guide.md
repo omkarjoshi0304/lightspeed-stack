@@ -16,7 +16,7 @@ The BYOK (Bring Your Own Knowledge) feature in Lightspeed Core enables users to 
   * [Step 2: Create Vector Database](#step-2-create-vector-database)
   * [Step 3: Configure Embedding Model](#step-3-configure-embedding-model)
   * [Step 4: Configure Llama Stack](#step-4-configure-llama-stack)
-  * [Step 5: Enable RAG Tools](#step-5-enable-rag-tools)
+  * [Step 5: Configure RAG Strategy](#step-5-configure-rag-strategy)
 * [Supported Vector Database Types](#supported-vector-database-types)
 * [Configuration Examples](#configuration-examples)
 * [Conclusion](#conclusion)
@@ -34,26 +34,57 @@ BYOK (Bring Your Own Knowledge) is Lightspeed Core's implementation of Retrieval
 
 ## How BYOK Works
 
-The BYOK system operates through a sophisticated chain of components:
+BYOK knowledge sources can be queried in two complementary modes, configured independently:
 
-1. **Agent Orchestrator**: The AI agent acts as the central coordinator, using the LLM as its reasoning engine
-2. **RAG Tool**: When the agent needs external information, it queries your custom vector database
-3. **Vector Database**: Your indexed knowledge sources, stored as vector embeddings for semantic search
-4. **Embedding Model**: Converts queries and documents into vector representations for similarity matching
-5. **Context Integration**: Retrieved knowledge is integrated into the AI's response generation process
+### Inline RAG
+
+Context is fetched from your BYOK vector stores and/or OKP and injected before the LLM request. No tool calls are required.
 
 ```mermaid
 graph TD
-    A[User Query] --> B[AI Agent]
-    B --> C{Need External Knowledge?}
-    C -->|Yes| D[RAG Tool]
-    C -->|No| E[Generate Response]
-    D --> F[Vector Database]
-    F --> G[Retrieve Relevant Context]
-    G --> H[Integrate Context]
-    H --> E
-    E --> I[Response to User]
+    A[User Query] --> B[Fetch Context]
+    B --> C[BYOK Vector Stores]
+    B --> D[OKP Vector Stores]
+    C --> E[Retrieved Chunks]
+    D --> E
+    E --> F[Inject Context into Prompt Context]
+    F --> G[LLM Generates Response]
+    G --> H[Response to User]
 ```
+
+### Tool RAG (on-demand retrieval)
+
+The LLM can call the `file_search` tool during generation when it decides external knowledge is needed. Both BYOK vector stores and OKP are supported in Tool RAG mode.
+
+```mermaid
+graph TD
+    A[User Query] --> P{Inline RAG enabled?}
+    P -->|Yes| Q[Fetch Context]
+    Q --> R[BYOK / OKP Vector Stores]
+    R --> S[Inject Context into Prompt Context]
+    S --> B[LLM]
+    P -->|No| B
+    B --> C{Need External Knowledge?}
+    C -->|Yes| D[file_search Tool]
+    C -->|No| E[Generate Response]
+    D --> F[BYOK / OKP Vector Stores]
+    F --> G[Retrieve Relevant Context]
+    G --> B
+    E --> H[Response to User]
+```
+
+Both modes rely on:
+- **Vector Database**: Your indexed knowledge sources stored as vector embeddings
+- **Embedding Model**: Converts queries and documents into vector representations for similarity matching
+
+Inline RAG additionally supports:
+- **Score Multiplier**: Optional weight applied per BYOK vector store when mixing multiple sources. Allows custom prioritization of content.
+
+> [!NOTE]
+> OKP and BYOK scores are not directly comparable (different scoring systems), so
+> `score_multiplier` does not apply to OKP results. To control the amount of retrieved
+> context, set the `BYOK_RAG_MAX_CHUNKS` and `OKP_RAG_MAX_CHUNKS` constants in `src/constants.py`
+> (defaults: 10 and 5 respectively). For Tool RAG, use `TOOL_RAG_MAX_CHUNKS` (default: 10).
 
 ---
 
@@ -244,12 +275,58 @@ registered_resources:
 
 **⚠️ Important**: The `vector_store_id` value must exactly match the ID you provided when creating the vector database using the rag-content tool. This identifier links your Llama Stack configuration to the specific vector database index you created.
 
-### Step 5: Enable RAG Tools
+> [!TIP]
+> Instead of manually editing `run.yaml`, you can declare your knowledge sources in the `byok_rag`
+> section of `lightspeed-stack.yaml`. The lightspeed-stack service automatically generates the required configuration
+> at startup.
+>
+> ```yaml
+> byok_rag:
+>   - rag_id: my-docs           # Unique identifier for this knowledge source
+>     rag_type: inline::faiss
+>     embedding_model: sentence-transformers/all-mpnet-base-v2
+>     embedding_dimension: 768
+>     vector_db_id: your-index-id  # Llama Stack vector store ID (from index generation)
+>     db_path: /path/to/vector_db/faiss_store.db
+>     score_multiplier: 1.0       # Optional: weight results when mixing multiple sources
+> ```
+>
+> When multiple BYOK sources are configured, `score_multiplier` adjusts the relative importance of
+> each store's results during Inline RAG retrieval. Values above 1.0 boost a store; below 1.0 reduce it.
 
-The configuration above automatically enables the RAG tools. The system will:
+### Step 5: Configure RAG Strategy
 
-1. **Detect RAG availability**: Automatically identify when RAG is available
-2. **Enhance prompts**: Encourage the AI to use RAG tools
+Add a `rag` section to your `lightspeed-stack.yaml` to choose how BYOK knowledge is used.
+Each list entry is a `rag_id` from `byok_rag`, or the special value `okp` for OKP.
+
+```yaml
+rag:
+  # Inline RAG: inject context before the LLM request (no tool calls needed)
+  inline:
+    - my-docs         # rag_id from byok_rag
+    - okp             # include OKP context inline
+
+  # Tool RAG: the LLM can call file_search to retrieve context on demand
+  # Omit to use all registered BYOK stores (backward compatibility)
+  tool:
+    - my-docs         # expose this BYOK store as the file_search tool
+    - okp             # expose OKP as the file_search tool
+
+# OKP provider settings (only relevant when okp is listed above)
+okp:
+  offline: true       # true = use parent_id for source URLs, false = use reference_url
+```
+
+Both modes can be enabled simultaneously. Choose based on your latency and control preferences:
+
+| Mode | When context is fetched | Tool call needed | score_multiplier |
+|------|------------------------|------------------|-----------------|
+| Inline RAG | With every query | No | Yes (BYOK only) |
+| Tool RAG | On LLM demand | Yes | No |
+
+> [!TIP]
+> A ready-to-use example combining BYOK and OKP is available at
+> [`examples/lightspeed-stack-byok-okp-rag.yaml`](../examples/lightspeed-stack-byok-okp-rag.yaml).
 
 ---
 

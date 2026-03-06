@@ -8,7 +8,7 @@ Uses only Python stdlib.
 
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any
+from typing import Any, Optional
 
 # Standard OAuth-style challenge so the client can drive an OAuth flow
 WWW_AUTHENTICATE = 'Bearer realm="mock-mcp", error="invalid_token"'
@@ -27,7 +27,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _parse_auth(self) -> str | None:
+    def _parse_auth(self) -> Optional[str]:
         """Return Bearer token if present, else None."""
         auth = self.headers.get("Authorization")
         if auth and auth.startswith("Bearer ") and "invalid" not in auth:

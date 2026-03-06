@@ -251,6 +251,7 @@ def check_found_conversation_id(context: Context) -> None:
 @then("The body of the response has following messages")
 def check_found_conversation_content(context: Context) -> None:
     """Check whether the conversation details have expected data."""
+    assert context.text is not None
     expected_data = json.loads(context.text)
     response_json = context.response.json()
     chat_messages = response_json["chat_history"][0]["messages"]

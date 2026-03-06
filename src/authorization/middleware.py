@@ -1,7 +1,7 @@
 """Authorization middleware and decorators."""
 
 from functools import lru_cache, wraps
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional
 
 from fastapi import HTTPException
 from starlette.requests import Request
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 
 @lru_cache(maxsize=1)
-def get_authorization_resolvers() -> Tuple[RolesResolver, AccessResolver]:
+def get_authorization_resolvers() -> tuple[RolesResolver, AccessResolver]:
     """Get authorization resolvers from configuration (cached).
 
     Return the configured RolesResolver and AccessResolver based on

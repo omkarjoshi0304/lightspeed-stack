@@ -2,7 +2,7 @@
 
 import platform
 import time
-from typing import Any
+from typing import Any, Optional
 
 import aiohttp
 
@@ -18,7 +18,7 @@ def _get_hostname() -> str:
     return platform.node() or "unknown"
 
 
-def _read_token_from_file(token_path: str) -> str | None:
+def _read_token_from_file(token_path: str) -> Optional[str]:
     """Read HEC token from file path."""
     try:
         with open(token_path, encoding="utf-8") as f:

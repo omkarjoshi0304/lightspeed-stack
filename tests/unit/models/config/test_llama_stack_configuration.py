@@ -1,7 +1,7 @@
 """Unit tests for LlamaStackConfiguration model."""
 
 import pytest
-from pydantic import ValidationError
+from pydantic import ValidationError, AnyHttpUrl
 
 from utils.checks import InvalidConfigurationError
 
@@ -25,7 +25,7 @@ def test_llama_stack_configuration_constructor() -> None:
 
     llama_stack_configuration = LlamaStackConfiguration(
         use_as_library_client=False,
-        url="http://localhost",
+        url=AnyHttpUrl("http://localhost"),
         library_client_config_path=None,
         api_key=None,
         timeout=60,

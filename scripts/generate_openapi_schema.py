@@ -50,8 +50,8 @@ def read_version_from_pyproject():
     # it is not safe to just try to read version from pyproject.toml file directly
     # the PDM tool itself is able to retrieve the version, even if the version
     # is generated dynamically
-    completed = subprocess.run(  # noqa: S603
-        ["pdm", "show", "--version"],  # noqa: S607
+    completed = subprocess.run(
+        ["pdm", "show", "--version"],
         capture_output=True,
         check=True,
     )

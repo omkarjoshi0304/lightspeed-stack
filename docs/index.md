@@ -72,5 +72,7 @@ Lightspeed Core Stack (LCS) is an AI powered assistant that provides answers to 
 
 [Testing](https://lightspeed-core.github.io/lightspeed-stack/testing.html)
 
+[End-to-End Tests Guide](https://lightspeed-core.github.io/lightspeed-stack/e2e_testing.html)
+
 [List of e2e scenarios](https://lightspeed-core.github.io/lightspeed-stack/e2e_scenarios.html)
 

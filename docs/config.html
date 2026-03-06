@@ -693,26 +693,31 @@ stored.</td>
           <td/>
         </tr>
         <tr class="odd">
+          <td>disable_shield_ids_override</td>
+          <td>boolean</td>
+          <td/>
+        </tr>
+        <tr class="even">
           <td>system_prompt_path</td>
           <td>string</td>
           <td/>
         </tr>
-        <tr class="even">
+        <tr class="odd">
           <td>system_prompt</td>
           <td>string</td>
           <td/>
         </tr>
-        <tr class="odd">
+        <tr class="even">
           <td>agent_card_path</td>
           <td>string</td>
           <td/>
         </tr>
-        <tr class="even">
+        <tr class="odd">
           <td>agent_card_config</td>
           <td>object</td>
           <td/>
         </tr>
-        <tr class="odd">
+        <tr class="even">
           <td>custom_profile</td>
           <td/>
           <td/>
@@ -1056,13 +1061,26 @@ article</a>
           <td>authorization_headers</td>
           <td>object</td>
           <td>Headers to send to the MCP server. The map contains the header name
-and the path to a file containing the header value (secret). There are 2
+and the path to a file containing the header value (secret). There are 3
 special cases: 1. Usage of the kubernetes token in the header. To
 specify this use a string &#x2018;kubernetes&#x2019; instead of the file path. 2.
-Usage of the client provided token in the header. To specify this use a
-string &#x2018;client&#x2019; instead of the file path.</td>
+Usage of the client-provided token in the header. To specify this use a
+string &#x2018;client&#x2019; instead of the file path. 3. Usage of the oauth token in
+the header. To specify this use a string &#x2018;oauth&#x2019; instead of the file
+path.</td>
         </tr>
         <tr class="odd">
+          <td>headers</td>
+          <td>array</td>
+          <td>List of HTTP header names to automatically forward from the incoming
+request to this MCP server. Headers listed here are extracted from the
+original client request and included when calling the MCP server. This
+is useful when infrastructure components (e.g.&#xA0;API gateways) inject
+headers that MCP servers need, such as x-rh-identity in HCC. Header
+matching is case-insensitive. These headers are additive with
+authorization_headers and MCP-HEADERS.</td>
+        </tr>
+        <tr class="even">
           <td>timeout</td>
           <td>integer</td>
           <td>Timeout in seconds for requests to the MCP server. If not specified,

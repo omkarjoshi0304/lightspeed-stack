@@ -38,11 +38,11 @@ class QuotaExceedError(Exception):
         else:
             match subject_type:
                 case "u":
-                    message = f"User {subject_id} has {available} tokens, but {needed} tokens are needed"  # noqa: E501
+                    message = f"User {subject_id} has {available} tokens, but {needed} tokens are needed"
                 case "c":
                     message = f"Cluster has {available} tokens, but {needed} tokens are needed"
                 case _:
-                    message = f"Unknown subject {subject_id} has {available} tokens, but {needed} tokens are needed"  # noqa: E501
+                    message = f"Unknown subject {subject_id} has {available} tokens, but {needed} tokens are needed"
 
         # call the base class constructor with the parameters it needs
         super().__init__(message)

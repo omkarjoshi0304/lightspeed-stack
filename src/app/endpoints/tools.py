@@ -29,6 +29,61 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["tools"])
 
 
+def _input_schema_to_parameters(
+    schema: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Convert a JSON Schema input_schema to a flat list of parameter dicts.
+
+    The Llama Stack SDK returns tool parameters as a JSON Schema object
+    (``input_schema``).  This function converts that representation into
+    the flat parameter list format used by the tools endpoint response.
+
+    Parameters:
+        schema: JSON Schema dict with ``properties`` and ``required`` keys,
+                or ``None`` if the tool has no parameters.
+
+    Returns:
+        A list of parameter dicts, each containing ``name``, ``description``,
+        ``parameter_type``, ``required``, and ``default`` keys.
+    """
+    if not schema or "properties" not in schema:
+        return []
+
+    required_params = set(schema.get("required", []))
+    return [
+        {
+            "name": name,
+            "description": prop.get("description", ""),
+            "parameter_type": prop.get("type", "string"),
+            "required": name in required_params,
+            "default": prop.get("default"),
+        }
+        for name, prop in schema["properties"].items()
+    ]
+
+
+def _normalize_tool_dict(tool_dict: dict[str, Any], toolgroup: Any) -> None:
+    """Normalize a ToolDef dict to the endpoint's response format.
+
+    Remaps field names (``name`` -> ``identifier``, ``input_schema`` ->
+    ``parameters``) and propagates ``provider_id``/``type`` from the
+    parent toolgroup.  Handles both missing keys and empty legacy
+    placeholders.
+    """
+    if "name" in tool_dict and not tool_dict.get("identifier"):
+        tool_dict["identifier"] = tool_dict["name"]
+    tool_dict.pop("name", None)
+
+    if "input_schema" in tool_dict and not tool_dict.get("parameters"):
+        tool_dict["parameters"] = _input_schema_to_parameters(tool_dict["input_schema"])
+    tool_dict.pop("input_schema", None)
+
+    if not tool_dict.get("provider_id"):
+        tool_dict["provider_id"] = toolgroup.provider_id
+    if not tool_dict.get("type"):
+        tool_dict["type"] = getattr(toolgroup, "type", None) or "tool"
+
+
 tools_responses: dict[int | str, dict[str, Any]] = {
     200: ToolsResponse.openapi_response(),
     401: UnauthorizedResponse.openapi_response(
@@ -119,6 +174,8 @@ async def tools_endpoint_handler(  # pylint: disable=too-many-locals,too-many-st
 
         for tool in tools_response:
             tool_dict = dict(tool)
+
+            _normalize_tool_dict(tool_dict, toolgroup)
 
             # Determine server source based on toolgroup type
             if toolgroup.identifier in mcp_server_names:

@@ -4,7 +4,7 @@ from typing import Any, Optional, Sequence, Callable
 
 from fastapi import FastAPI
 
-from app.routers import include_routers  # noqa:E402
+from app.routers import include_routers
 
 from app.endpoints import (
     conversations_v2,
@@ -27,7 +27,7 @@ from app.endpoints import (
     rlsapi_v1,
     a2a,
     query,
-)  # noqa:E402
+)
 
 
 class MockFastAPI(FastAPI):

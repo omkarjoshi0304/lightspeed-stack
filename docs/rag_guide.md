@@ -5,7 +5,7 @@ This document explains how to configure and customize your RAG pipeline using th
 * Initialize a vector store
 * Download and point to a local embedding model
 * Configure an inference provider (LLM)
-* Enable Agent-based RAG querying
+* Choose a RAG strategy (Inline RAG or Tool RAG)
 
 ---
 
@@ -15,7 +15,8 @@ This document explains how to configure and customize your RAG pipeline using th
 * [Prerequisites](#prerequisites)
    * [Set Up the Vector Database](#set-up-the-vector-database)
    * [Download an Embedding Model](#download-an-embedding-model)
-* [Configure Vector Store and Embedding Model](#configure-vector-store-and-embedding-model)
+* [Automatic Configuration Enrichment](#automatic-configuration-enrichment)
+* [Manual Configuration](#manual-configuration)
 * [Add an Inference Model (LLM)](#add-an-inference-model-llm)
 * [Complete Configuration Reference](#complete-configuration-reference)
 * [System Prompt Guidance for RAG (as a tool)](#system-prompt-guidance-for-rag-as-a-tool)
@@ -26,12 +27,17 @@ This document explains how to configure and customize your RAG pipeline using th
 
 # Introduction
 
-RAG in Lightspeed Core Stack (LCS) is yet only supported via the Agents API. The agent is responsible for planning and deciding when to query the vector index.
+Lightspeed Core Stack (LCS) supports two complementary RAG strategies:
 
-The system operates a chain of command. The **Agent** is the orchestrator, using the LLM as its reasoning engine. When a plan requires external information, the Agent queries the **Vector Store**. This is your database of indexed knowledge, which you are responsible for creating before running the stack. The **Embedding Model** is used to convert the queries to vectors. 
+- **Inline RAG**: context is fetched from BYOK vector stores and/or OKP and injected before the LLM request. No tool calls are required.
+- **Tool RAG**: the LLM can call the `file_search` tool during generation to retrieve context on demand from BYOK vector stores and/or OKP.
+
+Both strategies can be enabled independently via the `rag` section of `lightspeed-stack.yaml`. See [BYOK Feature Documentation](byok_guide.md) for configuration details.
+
+The **Embedding Model** is used to convert queries and documents into vector representations for similarity matching.
 
 > [!NOTE]
-> The same Embedding Model should be used to both create the store and to query it.
+> The same Embedding Model should be used to both create the vector store and to query it.
 
 ---
 
@@ -55,9 +61,37 @@ Download a local embedding model such as `sentence-transformers/all-mpnet-base-v
 
 ---
 
-## Configure Vector Store and Embedding Model
+## Automatic Configuration Enrichment
 
-Update the `run.yaml` file used by Llama Stack to point to:
+For users with BYOK or OKP/Solr configurations, you can automatically enrich your `run.yaml` file using the `llama_stack_configuration.py` script:
+
+```bash
+# Enrich run.yaml with BYOK and/or Solr configurations from lightspeed-stack.yaml
+python src/llama_stack_configuration.py -c lightspeed-stack.yaml -i run.yaml -o run_enriched.yaml
+```
+
+This script automatically adds the necessary:
+- **Storage backends** for BYOK vector databases
+- **Vector IO providers** for BYOK and Solr
+- **Vector stores** and **embedding models** registration
+- **Solr provider configuration** when `okp` is enabled in your RAG configuration
+
+The script reads your `lightspeed-stack.yaml` configuration and enriches a base `run.yaml` file with all required Llama Stack sections, eliminating the need to manually configure complex vector store setups.
+
+**Command line options:**
+- `-c, --config`: Lightspeed config file (default: `lightspeed-stack.yaml`)
+- `-i, --input`: Input Llama Stack config (default: `run.yaml`)
+- `-o, --output`: Output enriched config (default: `run_.yaml`)
+- `-e, --env-file`: Path to .env file for AZURE_API_KEY (default: `.env`)
+
+> [!TIP]
+> Use this script to generate your initial `run.yaml` configuration, then manually customize as needed for your specific setup.
+
+---
+
+## Manual Configuration
+
+If you prefer to manually configure your `run.yaml` file, update it to point to:
 
 * Your downloaded **embedding model**
 * Your generated **vector database**
@@ -268,74 +302,36 @@ The OKP (Offline Knowledge Portal) Solr Vector IO is a read-only vector search p
 
 #### How to Enable Solr Vector IO
 
-**1. Configure Llama Stack (`run.yaml`):**
+**1. Configure Lightspeed Stack (`lightspeed-stack.yaml`):**
 
 ```yaml
-providers:
-  vector_io:
-  - provider_id: solr-vector
-    provider_type: remote::solr_vector_io
-    config:
-      solr_url: http://localhost:8983/solr
-      collection_name: portal-rag
-      vector_field: chunk_vector
-      content_field: chunk
-      embedding_dimension: 384
-      embedding_model: ${env.EMBEDDING_MODEL_DIR}
-      chunk_window_config:
-        chunk_parent_id_field: "parent_id"
-        chunk_content_field: "chunk_field"
-        chunk_index_field: "chunk_index"
-        chunk_token_count_field: "num_tokens"
-        parent_total_chunks_field: "total_chunks"
-        parent_total_tokens_field: "total_tokens"
-        chunk_filter_query: "is_chunk:true" 
-      persistence:
-        namespace: portal-rag
-        backend: kv_default
+rag:
+  inline:
+    - okp               # inject OKP context before the LLM request
+  tool:
+    - okp               # expose OKP as the file_search tool
 
-registered_resources:
-  vector_stores:
-  - vector_store_id: portal-rag
-    provider_id: solr-vector
-    embedding_model: granite-embedding-30m
-    embedding_dimension: 384
+okp:
+  offline: true         # true = use parent_id for source URLs (offline mode)
+                        # false = use reference_url (online mode)
 ```
 
-Note: if the vector database (portal-rag) is not in the persistent data store within the vector_io provider
-(e.g. after deleting the llama stack cache) you will need to register the vector database under registered resources:
-
-
-```yaml
-  vector_stores:
-    - embedding_dimension: 384
-      embedding_model: sentence-transformers/${env.EMBEDDING_MODEL_DIR}
-      provider_id: solr-vector
-      vector_store_id: portal-rag
-```
-
-
-**2. Configure Lightspeed Stack (`lightspeed-stack.yaml`):**
-
-```yaml
-solr:
-  enabled: true     # Enable Solr vector IO functionality
-  offline: true     # Use parent_id for document URLs (offline mode)
-                   # Set to false to use reference_url (online mode)
-```
+> [!NOTE]
+> When `okp` is listed in `rag.inline` or `rag.tool`, Lightspeed Stack automatically enriches
+> the Llama Stack `run.yaml` at startup with the required `vector_io` provider and `registered_resources`
+> entries for the OKP vector store. No manual registration is needed.
 
 **Query Request Example:**
 ```
 curl -sX POST http://localhost:8080/v1/query \
     -H "Content-Type: application/json" \
-    -d '{"query" : "how do I secure a nodejs application with keycloak?", "no_tools":true}' | jq .
+    -d '{"query" : "how do I secure a nodejs application with keycloak?"}' | jq .
 ```
-Note: Solr does not currently work with RAG tools. You will need to specify "no_tools": true in request.
 
 
 **Query Processing:**
 
-1. When Solr is enabled, queries use the `portal-rag` vector store
+1. When OKP is enabled, queries use the `portal-rag` vector store
 2. Vector search is performed with configurable parameters:
    - `k`: Number of results (default: 5)
    - `score_threshold`: Minimum similarity score (default: 0.0)  
@@ -347,17 +343,37 @@ Note: Solr does not currently work with RAG tools. You will need to specify "no_
 
 **Query Filtering:**
 
-To filter the Solr context edit the *chunk_filter_query* field in the
-Solr **vector_io** provider in the `run.yaml`. Filters should follow the key:value format:
-ex. `"product:*openshift*"`
+To filter the Solr context, set the `chunk_filter_query` field in the `okp` section of
+`lightspeed-stack.yaml`. Filters follow the Solr key:value format and are applied as a static
+`fq` parameter on every OKP search request. The default value `"is_chunk:true"` restricts
+results to chunk documents. To add extra constraints, extend the expression using Solr boolean
+syntax:
 
-Note: This static filter is a temporary work-around. 
+```yaml
+okp:
+  chunk_filter_query: "is_chunk:true AND product:*openshift*"
+```
+
+> [!NOTE]
+> This static filter is a temporary work-around until dynamic per-request filtering is supported.
 
 **Prerequisites:**
 
 - Solr must be running and accessible at the configured URL
   for instructions on how to pull and run the OKP Solr image visit: https://github.com/lightspeed-core/lightspeed-providers/lightspeed_stack_providers/providers/remote/solr_vector_io/solr_vector_io/README.md
 
+
+**Chunk volume:**
+
+OKP and BYOK scores are not directly comparable (different scoring systems), so
+`score_multiplier` (a BYOK-only concept) does not apply to OKP results. To control
+the number of retrieved chunks, set the constants in `src/constants.py`:
+
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `OKP_RAG_MAX_CHUNKS` | 5 | Max chunks retrieved from OKP (Inline RAG) |
+| `BYOK_RAG_MAX_CHUNKS` | 10 | Max chunks retrieved from BYOK stores (Inline RAG) |
+| `TOOL_RAG_MAX_CHUNKS` | 10 | Max chunks retrieved via Tool RAG (`file_search`) |
 
 **Limitations:**
 

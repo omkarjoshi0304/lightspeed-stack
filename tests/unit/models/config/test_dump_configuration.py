@@ -206,7 +206,14 @@ def test_dump_configuration(tmp_path: Path) -> None:
                 "postgres": None,
             },
             "azure_entra_id": None,
-            "solr": None,
+            "rag": {
+                "inline": [],
+                "tool": None,
+            },
+            "okp": {
+                "offline": True,
+                "chunk_filter_query": "is_chunk:true",
+            },
             "splunk": None,
             "deployment_environment": "development",
         }
@@ -550,7 +557,14 @@ def test_dump_configuration_with_quota_limiters(tmp_path: Path) -> None:
                 "postgres": None,
             },
             "azure_entra_id": None,
-            "solr": None,
+            "rag": {
+                "inline": [],
+                "tool": None,
+            },
+            "okp": {
+                "offline": True,
+                "chunk_filter_query": "is_chunk:true",
+            },
             "splunk": None,
             "deployment_environment": "development",
         }
@@ -772,7 +786,14 @@ def test_dump_configuration_with_quota_limiters_different_values(
                 "postgres": None,
             },
             "azure_entra_id": None,
-            "solr": None,
+            "rag": {
+                "inline": [],
+                "tool": None,
+            },
+            "okp": {
+                "offline": True,
+                "chunk_filter_query": "is_chunk:true",
+            },
             "splunk": None,
             "deployment_environment": "development",
         }
@@ -950,6 +971,7 @@ def test_dump_configuration_byok(tmp_path: Path) -> None:
                     "rag_id": "rag_id",
                     "rag_type": "inline::faiss",
                     "vector_db_id": "vector_db_id",
+                    "score_multiplier": 1.0,
                 },
             ],
             "quota_handlers": {
@@ -968,7 +990,14 @@ def test_dump_configuration_byok(tmp_path: Path) -> None:
                 "postgres": None,
             },
             "azure_entra_id": None,
-            "solr": None,
+            "rag": {
+                "inline": [],
+                "tool": None,
+            },
+            "okp": {
+                "offline": True,
+                "chunk_filter_query": "is_chunk:true",
+            },
             "splunk": None,
             "deployment_environment": "development",
         }
@@ -1150,7 +1179,14 @@ def test_dump_configuration_pg_namespace(tmp_path: Path) -> None:
                 "postgres": None,
             },
             "azure_entra_id": None,
-            "solr": None,
+            "rag": {
+                "inline": [],
+                "tool": None,
+            },
+            "okp": {
+                "offline": True,
+                "chunk_filter_query": "is_chunk:true",
+            },
             "splunk": None,
             "deployment_environment": "development",
         }

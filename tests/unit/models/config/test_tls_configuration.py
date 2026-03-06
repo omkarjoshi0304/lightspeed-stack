@@ -36,6 +36,7 @@ def test_tls_configuration_in_service_configuration() -> None:
         access_log=True,
         workers=10,
         auth_enabled=True,
+        root_path="/.",
     )
     assert cfg is not None
     assert cfg.tls_config is not None

@@ -2,37 +2,35 @@
 
 # pylint: disable=too-many-lines
 
-from pathlib import Path
-from typing import Optional, Any, Pattern
+import re
 from enum import Enum
 from functools import cached_property
-import re
-import yaml
+from pathlib import Path
+from typing import Any, Optional, Pattern
 
 import jsonpath_ng
+import yaml
 from jsonpath_ng.exceptions import JSONPathError
 from pydantic import (
+    AnyHttpUrl,
     BaseModel,
     ConfigDict,
     Field,
+    FilePath,
+    NonNegativeInt,
+    PositiveInt,
+    PrivateAttr,
+    SecretStr,
     field_validator,
     model_validator,
-    FilePath,
-    AnyHttpUrl,
-    PositiveInt,
-    NonNegativeInt,
-    SecretStr,
-    PrivateAttr,
 )
-
 from pydantic.dataclasses import dataclass
-from typing_extensions import Self, Literal
+from typing_extensions import Literal, Self
 
 import constants
-
+from log import get_logger
 from utils import checks
 from utils.mcp_auth_headers import resolve_authorization_headers
-from log import get_logger
 
 logger = get_logger(__name__)
 
@@ -674,7 +672,7 @@ class LlamaStackConfiguration(ConfigurationBase):
             if self.library_client_config_path is None:
                 # pylint: disable=line-too-long
                 raise ValueError(
-                    "Llama stack library client mode is enabled but a configuration file path is not specified"  # noqa: E501
+                    "Llama stack library client mode is enabled but a configuration file path is not specified"
                 )
             # the configuration file must exists and be regular readable file
             checks.file_check(
@@ -1559,10 +1557,19 @@ class ByokRag(ConfigurationBase):
         description="Vector database identification.",
     )
 
-    db_path: FilePath = Field(
+    db_path: str = Field(
         ...,
         title="DB path",
         description="Path to RAG database.",
+    )
+
+    score_multiplier: float = Field(
+        constants.DEFAULT_SCORE_MULTIPLIER,
+        gt=0,
+        title="Score multiplier",
+        description="Multiplier applied to relevance scores from this vector store. "
+        "Used to weight results when querying multiple knowledge sources. "
+        "Values > 1 boost this store's results; values < 1 reduce them.",
     )
 
 
@@ -1687,25 +1694,57 @@ class QuotaHandlersConfiguration(ConfigurationBase):
     )
 
 
-class SolrConfiguration(ConfigurationBase):
-    """Solr configuration for vector search queries.
+class RagConfiguration(ConfigurationBase):
+    """RAG strategy configuration.
 
-    Controls whether to use offline or online mode when building document URLs
-    from vector search results, and enables/disables Solr vector IO functionality.
+    Controls which RAG sources are used for inline and tool-based retrieval.
+
+    Each strategy lists RAG IDs to include. The special ID ``"okp"`` defined in constants,
+    activates the OKP provider; all other IDs refer to entries in ``byok_rag``.
+
+    Backward compatibility:
+        - ``inline`` defaults to ``[]`` (no inline RAG).
+        - ``tool`` defaults to ``None`` which means all registered vector stores
+          are used (identical to the previous ``tool.byok.enabled = True`` default).
     """
 
-    enabled: bool = Field(
-        False,
-        title="Solr enabled",
-        description="When True, enables Solr vector IO functionality for vector search queries. "
-        "When False, disables Solr vector search processing.",
+    inline: list[str] = Field(
+        default_factory=list,
+        title="Inline RAG IDs",
+        description="RAG IDs whose sources are injected as context before the LLM call. "
+        f"Use '{constants.OKP_RAG_ID}' to enable OKP inline RAG. Empty by default (no inline RAG).",
     )
 
+    tool: Optional[list[str]] = Field(
+        default=None,
+        title="Tool RAG IDs",
+        description="RAG IDs made available to the LLM as a file_search tool. "
+        f"Use '{constants.OKP_RAG_ID}' to include the OKP vector store. "
+        "When omitted, all registered BYOK vector stores are used (backward compatibility).",
+    )
+
+
+class OkpConfiguration(ConfigurationBase):
+    """OKP (Offline Knowledge Portal) provider configuration.
+
+    Controls provider-specific behaviour for the OKP vector store.
+    Only relevant when ``"okp"`` is listed in ``rag.inline`` or ``rag.tool``.
+    """
+
     offline: bool = Field(
-        True,
-        title="Offline mode",
-        description="When True, use parent_id for chunk source URLs. "
+        default=True,
+        title="OKP offline mode",
+        description="When True, use parent_id for OKP chunk source URLs. "
         "When False, use reference_url for chunk source URLs.",
+    )
+
+    chunk_filter_query: str = Field(
+        default="is_chunk:true",
+        title="OKP chunk filter query",
+        description="OKP filter query applied to every OKP search request. "
+        "Defaults to 'is_chunk:true' to restrict results to chunk documents. "
+        "To add extra constraints, extend the expression using boolean syntax, "
+        "e.g. 'is_chunk:true AND product:*openshift*'.",
     )
 
 
@@ -1847,10 +1886,17 @@ class Configuration(ConfigurationBase):
         "Used in telemetry events.",
     )
 
-    solr: Optional[SolrConfiguration] = Field(
-        default=None,
-        title="Solr configuration",
-        description="Configuration for Solr vector search operations.",
+    rag: RagConfiguration = Field(
+        default_factory=RagConfiguration,
+        title="RAG configuration",
+        description="Configuration for all RAG strategies (inline and tool-based).",
+    )
+
+    okp: OkpConfiguration = Field(
+        default_factory=OkpConfiguration,
+        title="OKP configuration",
+        description=f"OKP provider settings. Only used when '{constants.OKP_RAG_ID}' is listed "
+        "in rag.inline or rag.tool.",
     )
 
     @model_validator(mode="after")

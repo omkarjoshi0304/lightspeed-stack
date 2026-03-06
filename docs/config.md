@@ -110,15 +110,32 @@ Microsoft Entra ID authentication attributes for Azure.
 
 BYOK (Bring Your Own Knowledge) RAG configuration.
 
+Each entry registers a local vector store. The `rag_id` is the
+identifier used in `rag.inline` and `rag.tool` to select which stores to use.
+
+Example:
+
+```yaml
+byok_rag:
+  - rag_id: my-docs          # referenced in rag.inline / rag.tool
+    rag_type: inline::faiss
+    embedding_model: sentence-transformers/all-MiniLM-L6-v2
+    embedding_dimension: 384
+    vector_db_id: vs_abc123
+    db_path: /path/to/faiss_store.db
+    score_multiplier: 1.0
+```
+
 
 | Field | Type | Description |
 |-------|------|-------------|
 | rag_id | string | Unique RAG ID |
-| rag_type | string | Type of RAG database. |
+| rag_type | string | Type of RAG database (e.g. `inline::faiss`). |
 | embedding_model | string | Embedding model identification |
 | embedding_dimension | integer | Dimensionality of embedding vectors. |
 | vector_db_id | string | Vector database identification. |
 | db_path | string | Path to RAG database. |
+| score_multiplier | number | Multiplier applied to relevance scores from this vector store when querying multiple sources. Values > 1 boost results; values < 1 reduce them. Default: 1.0. |
 
 
 ## CORSConfiguration
@@ -170,7 +187,7 @@ Global service configuration.
 | azure_entra_id |  |  |
 | splunk |  | Splunk HEC configuration for sending telemetry events. |
 | deployment_environment | string | Deployment environment name (e.g., 'development', 'staging', 'production'). Used in telemetry events. |
-| solr |  | Configuration for Solr vector search operations. |
+| rag |  | RAG strategy configuration (OKP and BYOK). Controls pre-query (Inline RAG) and tool-based (Tool RAG) retrieval. |
 
 
 ## ConversationHistoryConfiguration
@@ -209,6 +226,7 @@ Service customization.
 |-------|------|-------------|
 | profile_path | string |  |
 | disable_query_system_prompt | boolean |  |
+| disable_shield_ids_override | boolean |  |
 | system_prompt_path | string |  |
 | system_prompt | string |  |
 | agent_card_path | string |  |
@@ -372,7 +390,7 @@ Useful resources:
 | name | string | MCP server name that must be unique |
 | provider_id | string | MCP provider identification |
 | url | string | URL of the MCP server |
-| authorization_headers | object | Headers to send to the MCP server. The map contains the header name and the path to a file containing the header value (secret). There are 3 special cases: 1. Usage of the kubernetes token in the header — use the string 'kubernetes' instead of the file path. 2. Usage of the client-provided token in the header — use the string 'client' instead of the file path. 3. Usage of OAuth token (resolved at request time or 401 with WWW-Authenticate) — use the string 'oauth' instead of the file path. |
+| authorization_headers | object | Headers to send to the MCP server. The map contains the header name and the path to a file containing the header value (secret). There are 3 special cases: 1. Usage of the kubernetes token in the header. To specify this use a string 'kubernetes' instead of the file path. 2. Usage of the client-provided token in the header. To specify this use a string 'client' instead of the file path. 3. Usage of the oauth token in the header. To specify this use a string 'oauth' instead of the file path.  |
 | headers | array | List of HTTP header names to automatically forward from the incoming request to this MCP server. Headers listed here are extracted from the original client request and included when calling the MCP server. This is useful when infrastructure components (e.g. API gateways) inject headers that MCP servers need, such as x-rh-identity in HCC. Header matching is case-insensitive. These headers are additive with authorization_headers and MCP-HEADERS. |
 | timeout | integer | Timeout in seconds for requests to the MCP server. If not specified, the default timeout from Llama Stack will be used. Note: This field is reserved for future use when Llama Stack adds timeout support. |
 
@@ -519,19 +537,60 @@ the service can handle requests concurrently.
 | cors |  | Cross-Origin Resource Sharing configuration for cross-domain requests |
 
 
-## SolrConfiguration
+## RagConfiguration
 
 
-Solr configuration for vector search queries.
+Top-level RAG strategy configuration. Controls two complementary retrieval modes:
 
-Controls whether to use offline or online mode when building document URLs
-from vector search results, and enables/disables Solr vector IO functionality.
+- **Inline RAG**: context is fetched from the listed sources and injected before the
+  LLM request.
+- **Tool RAG**: the LLM can call the `file_search` tool during generation to retrieve
+  context on demand from the listed vector stores. Supports both BYOK and OKP.
+
+Each strategy is configured as a list of RAG IDs referencing entries in `byok_rag`.
+The special ID `okp` activates the OKP provider (no `byok_rag` entry needed).
+
+**Backward compatibility**: omitting `tool` uses all registered BYOK vector stores
+(equivalent to the old `tool.byok.enabled = True`). Omitting `inline` means no
+context is injected before the LLM request.
+
+Example:
+
+```yaml
+rag:
+  inline:
+    - my-docs       # inject context from my-docs before the LLM request
+  tool:
+    - okp       # LLM can search OKP as a tool
+    - my-docs       # LLM can also search my-docs as a tool
+
+okp:
+  offline: true     # use parent_id for OKP URL construction
+```
 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| enabled | boolean | When True, enables Solr vector IO functionality for vector search queries. When False, disables Solr vector search processing. |
-| offline | boolean | When True, use parent_id for chunk source URLs. When False, use reference_url for chunk source URLs. |
+| inline | list[string] | RAG IDs whose content is injected before the LLM request. Use `okp` for OKP. Empty by default (no inline RAG). |
+| tool | list[string] or null | RAG IDs exposed as a `file_search` tool the LLM can invoke. Use `okp` to include OKP. When omitted, all registered BYOK vector stores are used (backward compatibility). |
+
+
+## OkpConfiguration
+
+OKP (Offline Knowledge Portal) provider settings. Only used when `okp` is listed in `rag.inline` or `rag.tool`.
+
+Example:
+
+```yaml
+okp:
+  offline: true                    # use parent_id for OKP URL construction
+  chunk_filter_query: "is_chunk:true"
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| offline | boolean | When `true` (default), use `parent_id` for OKP chunk source URLs. When `false`, use `reference_url`. |
+| chunk_filter_query | string | OKP filter query (`fq`) applied to every OKP search request. Defaults to `"is_chunk:true"`. Extend with `AND` for extra constraints. |
 
 
 ## SplunkConfiguration

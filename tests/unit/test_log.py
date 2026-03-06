@@ -6,8 +6,12 @@ import pytest
 from pytest_mock import MockerFixture
 from rich.logging import RichHandler
 
-from log import get_logger, resolve_log_level, create_log_handler
-from constants import LIGHTSPEED_STACK_LOG_LEVEL_ENV_VAR, DEFAULT_LOG_FORMAT
+from constants import (
+    DEFAULT_LOG_FORMAT,
+    LIGHTSPEED_STACK_DISABLE_RICH_HANDLER_ENV_VAR,
+    LIGHTSPEED_STACK_LOG_LEVEL_ENV_VAR,
+)
+from log import create_log_handler, get_logger, resolve_log_level
 
 
 def test_get_logger() -> None:
@@ -116,3 +120,36 @@ def test_create_log_handler_non_tty_format(mocker: MockerFixture) -> None:
     assert handler.formatter is not None
     # pylint: disable=protected-access
     assert handler.formatter._fmt == DEFAULT_LOG_FORMAT
+
+
+def test_create_log_handler_disable_rich_with_tty(
+    mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that RichHandler is disabled when env var is set, even with TTY."""
+    mocker.patch("sys.stderr.isatty", return_value=True)
+    monkeypatch.setenv(LIGHTSPEED_STACK_DISABLE_RICH_HANDLER_ENV_VAR, "1")
+    handler = create_log_handler()
+    assert isinstance(handler, logging.StreamHandler)
+    assert not isinstance(handler, RichHandler)
+
+
+def test_create_log_handler_disable_rich_format(
+    mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that disabled RichHandler uses DEFAULT_LOG_FORMAT."""
+    mocker.patch("sys.stderr.isatty", return_value=True)
+    monkeypatch.setenv(LIGHTSPEED_STACK_DISABLE_RICH_HANDLER_ENV_VAR, "true")
+    handler = create_log_handler()
+    assert handler.formatter is not None
+    # pylint: disable=protected-access
+    assert handler.formatter._fmt == DEFAULT_LOG_FORMAT
+
+
+def test_create_log_handler_enable_rich_when_env_var_empty(
+    mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that RichHandler is used when env var is empty string."""
+    mocker.patch("sys.stderr.isatty", return_value=True)
+    monkeypatch.setenv(LIGHTSPEED_STACK_DISABLE_RICH_HANDLER_ENV_VAR, "")
+    handler = create_log_handler()
+    assert isinstance(handler, RichHandler)

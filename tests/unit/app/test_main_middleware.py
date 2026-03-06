@@ -2,9 +2,9 @@
 
 import json
 from typing import cast
-from unittest.mock import patch
 
 import pytest
+from pytest_mock import MockerFixture
 from fastapi import HTTPException, status
 from starlette.types import Message, Receive, Scope, Send
 
@@ -157,20 +157,20 @@ async def test_rest_api_metrics_skips_non_http() -> None:
 
 
 @pytest.mark.asyncio
-@patch("app.main.app_routes_paths", ["/v1/infer"])
-async def test_rest_api_metrics_increments_counter_on_exception() -> None:
+async def test_rest_api_metrics_increments_counter_on_exception(
+    mocker: MockerFixture,
+) -> None:
     """Counter must be incremented even when the inner app raises."""
+    mocker.patch("app.main.app_routes_paths", ["/v1/infer"])
+    mock_metrics = mocker.patch("app.main.metrics")
 
     async def failing_app(_scope: Scope, _receive: Receive, _send: Send) -> None:
         raise RuntimeError("boom")
 
-    with patch("app.main.metrics") as mock_metrics:
-        middleware = RestApiMetricsMiddleware(failing_app)
+    middleware = RestApiMetricsMiddleware(failing_app)
 
-        with pytest.raises(RuntimeError, match="boom"):
-            await middleware(
-                _make_scope("/v1/infer"), _noop_receive, _ResponseCollector()
-            )
+    with pytest.raises(RuntimeError, match="boom"):
+        await middleware(_make_scope("/v1/infer"), _noop_receive, _ResponseCollector())
 
     mock_metrics.response_duration_seconds.labels.assert_called_once_with("/v1/infer")
     mock_metrics.rest_api_calls_total.labels.assert_called_once_with("/v1/infer", 500)

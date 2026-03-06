@@ -52,7 +52,8 @@ For Output Constraints:
 - Do **NOT** use all uppercase - capitalize only the first letter of significant words
 - Exclude articles and prepositions (e.g., "a," "the," "of," "on," "in")
 - Exclude all punctuation and interpunction marks (e.g., . , : ; ! ? | "")
-- Retain original abbreviations. Do not expand an abbreviation if its specific meaning in the context is unknown or ambiguous.
+- Retain original abbreviations. Do not expand an abbreviation if its specific meaning in the
+  context is unknown or ambiguous.
 - Neutral objective language
 - Do **NOT** provide explanations, reasoning, or "processing steps".
 - Do **NOT** provide multiple options (e.g., do not use "or").
@@ -130,9 +131,6 @@ MCP_AUTH_KUBERNETES = "kubernetes"
 MCP_AUTH_CLIENT = "client"
 MCP_AUTH_OAUTH = "oauth"
 
-# default RAG tool value
-DEFAULT_RAG_TOOL = "file_search"
-
 # Media type constants for streaming responses
 MEDIA_TYPE_JSON = "application/json"
 MEDIA_TYPE_TEXT = "text/plain"
@@ -173,13 +171,38 @@ DEFAULT_EMBEDDING_DIMENSION = 768
 USER_QUOTA_LIMITER = "user_limiter"
 CLUSTER_QUOTA_LIMITER = "cluster_limiter"
 
-# Vector search constants
-VECTOR_SEARCH_DEFAULT_K = 5
-VECTOR_SEARCH_DEFAULT_SCORE_THRESHOLD = 0.0
-VECTOR_SEARCH_DEFAULT_MODE = "hybrid"
+# RAG as a tool constants
+DEFAULT_RAG_TOOL = "file_search"
+TOOL_RAG_MAX_CHUNKS = 10  # retrieved from RAG as a tool
+
+# Inline RAG constants
+BYOK_RAG_MAX_CHUNKS = 10  # retrieved from BYOK RAG
+OKP_RAG_MAX_CHUNKS = 5  # retrieved from OKP RAG
+
+# Solr OKP constants
+SOLR_VECTOR_SEARCH_DEFAULT_K = 5
+SOLR_VECTOR_SEARCH_DEFAULT_SCORE_THRESHOLD = 0.3
+SOLR_VECTOR_SEARCH_DEFAULT_MODE = "hybrid"
 
 # SOLR OKP RAG
 MIMIR_DOC_URL = "https://mimir.corp.redhat.com"
+
+SOLR_PROVIDER_ID = "okp_solr"
+
+# Solr default configuration values (can be overridden via environment variables)
+SOLR_DEFAULT_VECTOR_STORE_ID = "portal-rag"
+SOLR_DEFAULT_VECTOR_FIELD = "chunk_vector"
+SOLR_DEFAULT_CONTENT_FIELD = "chunk"
+SOLR_DEFAULT_EMBEDDING_MODEL = (
+    "sentence-transformers/ibm-granite/granite-embedding-30m-english"
+)
+SOLR_DEFAULT_EMBEDDING_DIMENSION = 384
+
+# Default score multiplier for BYOK RAG vector stores
+DEFAULT_SCORE_MULTIPLIER = 1.0
+
+# Special RAG ID that activates the OKP provider when listed in rag.inline or rag.tool
+OKP_RAG_ID = "okp"
 
 # Logging configuration constants
 # Environment variable name for configurable log level
@@ -188,3 +211,6 @@ LIGHTSPEED_STACK_LOG_LEVEL_ENV_VAR = "LIGHTSPEED_STACK_LOG_LEVEL"
 DEFAULT_LOG_LEVEL = "INFO"
 # Default log format for plain-text logging in non-TTY environments
 DEFAULT_LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(lineno)d %(message)s"
+# Environment variable to force StreamHandler instead of RichHandler
+# Set to any non-empty value to disable RichHandler
+LIGHTSPEED_STACK_DISABLE_RICH_HANDLER_ENV_VAR = "LIGHTSPEED_STACK_DISABLE_RICH_HANDLER"

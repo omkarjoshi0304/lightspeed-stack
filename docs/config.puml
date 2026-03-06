@@ -97,6 +97,7 @@ class "Customization" as src.models.config.Customization {
   agent_card_path : Optional[FilePath]
   custom_profile : Optional[CustomProfile]
   disable_query_system_prompt : bool
+  disable_shield_ids_override : bool
   profile_path : Optional[str]
   system_prompt : Optional[str]
   system_prompt_path : Optional[FilePath]
@@ -150,12 +151,14 @@ class "LlamaStackConfiguration" as src.models.config.LlamaStackConfiguration {
 }
 class "ModelContextProtocolServer" as src.models.config.ModelContextProtocolServer {
   authorization_headers : dict[str, str]
+  headers : list[str]
   name : str
   provider_id : str
   resolved_authorization_headers
   timeout : Optional[PositiveInt]
   url : str
   resolve_auth_headers() -> Self
+  validate_headers(value: list[str]) -> list[str]
 }
 class "PostgreSQLDatabaseConfiguration" as src.models.config.PostgreSQLDatabaseConfiguration {
   ca_cert_path : Optional[FilePath]

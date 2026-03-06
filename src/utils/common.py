@@ -2,7 +2,7 @@
 
 import asyncio
 from functools import wraps
-from typing import Any, Callable, List, cast
+from typing import Any, Callable, cast
 from logging import Logger
 
 from llama_stack_client import AsyncLlamaStackClient
@@ -54,7 +54,7 @@ async def register_mcp_servers_async(
 
 async def _register_mcp_toolgroups_async(
     client: AsyncLlamaStackClient,
-    mcp_servers: List[ModelContextProtocolServer],
+    mcp_servers: list[ModelContextProtocolServer],
     logger: Logger,
 ) -> None:
     """

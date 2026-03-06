@@ -4,6 +4,8 @@
 
 import json
 
+from pydantic import AnyHttpUrl
+
 import pytest
 from client import AsyncLlamaStackClientHolder
 from models.config import LlamaStackConfiguration
@@ -54,7 +56,7 @@ async def test_get_async_llama_stack_library_client() -> None:
 async def test_get_async_llama_stack_remote_client() -> None:
     """Test the initialization of asynchronous Llama Stack client in server mode."""
     cfg = LlamaStackConfiguration(
-        url="http://localhost:8321",
+        url=AnyHttpUrl("http://localhost:8321"),
         api_key=None,
         use_as_library_client=False,
         library_client_config_path="./tests/configuration/minimal-stack.yaml",
@@ -90,7 +92,7 @@ async def test_get_async_llama_stack_wrong_configuration() -> None:
 async def test_update_provider_data_service_client() -> None:
     """Test that update_provider_data updates headers for service clients."""
     cfg = LlamaStackConfiguration(
-        url="http://localhost:8321",
+        url=AnyHttpUrl("http://localhost:8321"),
         api_key=None,
         use_as_library_client=False,
         library_client_config_path=None,

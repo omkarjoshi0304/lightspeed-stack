@@ -1,7 +1,7 @@
 # pylint: disable=no-member
 """Unit tests for rlsapi v1 request models."""
 
-from typing import Any, Optional
+from typing import Any, Optional, Callable
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -594,3 +594,33 @@ class TestGetInputSourceEdgeCases:
         )
         result = request.get_input_source()
         assert result == "Q\n\nS\n\nA\n\nT"
+
+
+@pytest.mark.parametrize(
+    ("model", "field", "max_length"),
+    [
+        (RlsapiV1Attachment, "contents", 65_536),
+        (RlsapiV1Terminal, "output", 65_536),
+        (RlsapiV1Context, "stdin", 65_536),
+        (RlsapiV1InferRequest, "question", 10_240),
+    ],
+    ids=[
+        "attachment-contents",
+        "terminal-output",
+        "context-stdin",
+        "infer-request-question",
+    ],
+)
+def test_value_max_length(model: Callable, field: str, max_length: int) -> None:
+    """Test that fields with longer than allowed data are not allowed"""
+    value = "a" * max_length
+    bad_value = value + "a"
+
+    instance = model(**{field: value})
+    with pytest.raises(
+        ValidationError,
+        match=f"should have at most {max_length} characters",
+    ):
+        model(**{field: bad_value})
+
+    assert getattr(instance, field) == value

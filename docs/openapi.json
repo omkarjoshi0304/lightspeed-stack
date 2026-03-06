@@ -5503,6 +5503,13 @@
                         "format": "file-path",
                         "title": "DB path",
                         "description": "Path to RAG database."
+                    },
+                    "score_multiplier": {
+                        "type": "number",
+                        "exclusiveMinimum": 0.0,
+                        "title": "Score multiplier",
+                        "description": "Multiplier applied to relevance scores from this vector store. Used to weight results when querying multiple knowledge sources. Values > 1 boost this store's results; values < 1 reduce them.",
+                        "default": 1.0
                     }
                 },
                 "additionalProperties": false,
@@ -5714,17 +5721,15 @@
                         "description": "Deployment environment name (e.g., 'development', 'staging', 'production'). Used in telemetry events.",
                         "default": "development"
                     },
-                    "solr": {
-                        "anyOf": [
-                            {
-                                "$ref": "#/components/schemas/SolrConfiguration"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Solr configuration",
-                        "description": "Configuration for Solr vector search operations."
+                    "rag": {
+                        "$ref": "#/components/schemas/RagConfiguration",
+                        "title": "RAG configuration",
+                        "description": "Configuration for all RAG strategies (inline and tool-based)."
+                    },
+                    "okp": {
+                        "$ref": "#/components/schemas/OkpConfiguration",
+                        "title": "OKP configuration",
+                        "description": "OKP provider settings. Only used when 'okp' is listed in rag.inline or rag.tool."
                     }
                 },
                 "additionalProperties": false,
@@ -7343,6 +7348,14 @@
                         "title": "Authorization headers",
                         "description": "Headers to send to the MCP server. The map contains the header name and the path to a file containing the header value (secret). There are 3 special cases: 1. Usage of the kubernetes token in the header. To specify this use a string 'kubernetes' instead of the file path. 2. Usage of the client-provided token in the header. To specify this use a string 'client' instead of the file path. 3. Usage of the oauth token in the header. To specify this use a string 'oauth' instead of the file path. "
                     },
+                    "headers": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Propagated headers",
+                        "description": "List of HTTP header names to automatically forward from the incoming request to this MCP server. Headers listed here are extracted from the original client request and included when calling the MCP server. This is useful when infrastructure components (e.g. API gateways) inject headers that MCP servers need, such as x-rh-identity in HCC. Header matching is case-insensitive. These headers are additive with authorization_headers and MCP-HEADERS."
+                    },
                     "timeout": {
                         "anyOf": [
                             {
@@ -7566,6 +7579,26 @@
                 "type": "object",
                 "title": "OAuthFlows",
                 "description": "Defines the configuration for the supported OAuth 2.0 flows."
+            },
+            "OkpConfiguration": {
+                "properties": {
+                    "offline": {
+                        "type": "boolean",
+                        "title": "OKP offline mode",
+                        "description": "When True, use parent_id for OKP chunk source URLs. When False, use reference_url for chunk source URLs.",
+                        "default": true
+                    },
+                    "chunk_filter_query": {
+                        "type": "string",
+                        "title": "OKP chunk filter query",
+                        "description": "OKP filter query applied to every OKP search request. Defaults to 'is_chunk:true' to restrict results to chunk documents. To add extra constraints, extend the expression using boolean syntax, e.g. 'is_chunk:true AND product:*openshift*'.",
+                        "default": "is_chunk:true"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "title": "OkpConfiguration",
+                "description": "OKP (Offline Knowledge Portal) provider configuration.\n\nControls provider-specific behaviour for the OKP vector store.\nOnly relevant when ``\"okp\"`` is listed in ``rag.inline`` or ``rag.tool``."
             },
             "OpenIdConnectSecurityScheme": {
                 "properties": {
@@ -8741,6 +8774,37 @@
                 "title": "RHIdentityConfiguration",
                 "description": "Red Hat Identity authentication configuration."
             },
+            "RagConfiguration": {
+                "properties": {
+                    "inline": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Inline RAG IDs",
+                        "description": "RAG IDs whose sources are injected as context before the LLM call. Use 'okp' to enable OKP inline RAG. Empty by default (no inline RAG)."
+                    },
+                    "tool": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tool RAG IDs",
+                        "description": "RAG IDs made available to the LLM as a file_search tool. Use 'okp' to include the OKP vector store. When omitted, all registered BYOK vector stores are used (backward compatibility)."
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "title": "RagConfiguration",
+                "description": "RAG strategy configuration.\n\nControls which RAG sources are used for inline and tool-based retrieval.\n\nEach strategy lists RAG IDs to include. The special ID ``\"okp\"`` defined in constants,\nactivates the OKP provider; all other IDs refer to entries in ``byok_rag``.\n\nBackward compatibility:\n    - ``inline`` defaults to ``[]`` (no inline RAG).\n    - ``tool`` defaults to ``None`` which means all registered vector stores\n      are used (identical to the previous ``tool.byok.enabled = True`` default)."
+            },
             "ReadinessResponse": {
                 "properties": {
                     "ready": {
@@ -8835,6 +8899,7 @@
                 "properties": {
                     "contents": {
                         "type": "string",
+                        "maxLength": 65536,
                         "title": "Contents",
                         "description": "File contents read on client",
                         "default": "",
@@ -8862,6 +8927,7 @@
                 "properties": {
                     "nevra": {
                         "type": "string",
+                        "pattern": "^[a-zA-Z0-9._:+~\\-]*$",
                         "title": "Nevra",
                         "description": "CLA NEVRA identifier",
                         "default": "",
@@ -8871,6 +8937,7 @@
                     },
                     "version": {
                         "type": "string",
+                        "pattern": "^[a-zA-Z0-9._\\-]*$",
                         "title": "Version",
                         "description": "Command line assistant version",
                         "default": "",
@@ -8888,6 +8955,7 @@
                 "properties": {
                     "stdin": {
                         "type": "string",
+                        "maxLength": 65536,
                         "title": "Stdin",
                         "description": "Redirect input from stdin",
                         "default": "",
@@ -8955,6 +9023,7 @@
                 "properties": {
                     "question": {
                         "type": "string",
+                        "maxLength": 10240,
                         "minLength": 1,
                         "title": "Question",
                         "description": "User question",
@@ -9013,6 +9082,7 @@
                 "properties": {
                     "os": {
                         "type": "string",
+                        "pattern": "^[a-zA-Z0-9._ \\-]*$",
                         "title": "Os",
                         "description": "Operating system name",
                         "default": "",
@@ -9022,6 +9092,7 @@
                     },
                     "version": {
                         "type": "string",
+                        "pattern": "^[a-zA-Z0-9._ \\-]*$",
                         "title": "Version",
                         "description": "Operating system version",
                         "default": "",
@@ -9032,6 +9103,7 @@
                     },
                     "arch": {
                         "type": "string",
+                        "pattern": "^[a-zA-Z0-9._ \\-]*$",
                         "title": "Arch",
                         "description": "System architecture",
                         "default": "",
@@ -9042,6 +9114,7 @@
                     },
                     "id": {
                         "type": "string",
+                        "pattern": "^[a-zA-Z0-9._\\-]*$",
                         "title": "Id",
                         "description": "Client machine ID",
                         "default": "",
@@ -9059,6 +9132,7 @@
                 "properties": {
                     "output": {
                         "type": "string",
+                        "maxLength": 65536,
                         "title": "Output",
                         "description": "Terminal output from client",
                         "default": "",
@@ -9241,26 +9315,6 @@
                         ]
                     }
                 ]
-            },
-            "SolrConfiguration": {
-                "properties": {
-                    "enabled": {
-                        "type": "boolean",
-                        "title": "Solr enabled",
-                        "description": "When True, enables Solr vector IO functionality for vector search queries. When False, disables Solr vector search processing.",
-                        "default": false
-                    },
-                    "offline": {
-                        "type": "boolean",
-                        "title": "Offline mode",
-                        "description": "When True, use parent_id for chunk source URLs. When False, use reference_url for chunk source URLs.",
-                        "default": true
-                    }
-                },
-                "additionalProperties": false,
-                "type": "object",
-                "title": "SolrConfiguration",
-                "description": "Solr configuration for vector search queries.\n\nControls whether to use offline or online mode when building document URLs\nfrom vector search results, and enables/disables Solr vector IO functionality."
             },
             "SplunkConfiguration": {
                 "properties": {
