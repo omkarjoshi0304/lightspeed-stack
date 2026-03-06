@@ -14,7 +14,7 @@ llama_stack:
   # Alternative for "as library use"
   # use_as_library_client: true
   # library_client_config_path: <path-to-llama-stack-run.yaml-file>
-  url: http://llama-stack:8321
+  url: http://localhost:8321
   api_key: xyzzy
 user_data_collection:
   feedback_enabled: true
@@ -36,3 +36,17 @@ authentication:
 solr:
   enabled: false
   offline: true
+
+mcp_servers:
+  - name: "rhos-mcps-openstack"
+    provider_id: "model-context-protocol"
+    url: "http://localhost:3000/openstack"
+
+
+byok_rag:
+  - rag_id: "vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360"
+    rag_type: "inline::faiss"
+    embedding_model: "sentence-transformers/all-mpnet-base-v2"
+    embedding_dimension: 768
+    vector_db_id: "vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360"
+    db_path: "/Users/ojoshi/Documents/GitHub/rag-content/vector_db/faiss_store.db"

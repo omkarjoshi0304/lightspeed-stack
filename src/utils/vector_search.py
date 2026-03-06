@@ -136,68 +136,92 @@ async def perform_vector_search(
 ) -> tuple[list[Any], list[float], list[ReferencedDocument], list[RAGChunk]]:
     """
     Perform vector search and extract RAG chunks and referenced documents.
-
-    Args:
-        client: The AsyncLlamaStackClient to use for the request
-        query_request: The user's query request
-        configuration: Application configuration
-
-    Returns:
-        Tuple containing:
-        - retrieved_chunks: Raw chunks from vector store
-        - retrieved_scores: Scores for each chunk
-        - doc_ids_from_chunks: Referenced documents extracted from chunks
-        - rag_chunks: Processed RAG chunks ready for use
+    Supports both Solr-based and BYOK RAG-based vector search.
     """
     retrieved_chunks: list[Any] = []
     retrieved_scores: list[float] = []
     doc_ids_from_chunks: list[ReferencedDocument] = []
     rag_chunks: list[RAGChunk] = []
 
-    # Check if Solr is enabled in configuration
-    if not _is_solr_enabled(configuration):
-        logger.info("Solr vector IO is disabled, skipping vector search")
-        return retrieved_chunks, retrieved_scores, doc_ids_from_chunks, rag_chunks
-
-    # Get offline setting from configuration
-    offline = configuration.solr.offline if configuration.solr else True
-
-    try:
-        vector_store_ids = _get_vector_store_ids(True)
-
-        if vector_store_ids:
-            vector_store_id = vector_store_ids[0]
-            params = _build_query_params(query_request)
-
-            query_response = await client.vector_io.query(
-                vector_store_id=vector_store_id,
-                query=query_request.query,
-                params=params,
-            )
-
-            logger.info("The query response total payload: %s", query_response)
-
-            if query_response.chunks:
-                retrieved_chunks = query_response.chunks
-                retrieved_scores = (
-                    query_response.scores if hasattr(query_response, "scores") else []
+    if _is_solr_enabled(configuration):
+        # Existing Solr path
+        offline = configuration.solr.offline if configuration.solr else True
+        try:
+            vector_store_ids = _get_vector_store_ids(True)
+            if vector_store_ids:
+                vector_store_id = vector_store_ids[0]
+                params = _build_query_params(query_request)
+                query_response = await client.vector_io.query(
+                    vector_store_id=vector_store_id,
+                    query=query_request.query,
+                    params=params,
                 )
+                if query_response.chunks:
+                    retrieved_chunks = query_response.chunks
+                    retrieved_scores = (
+                        query_response.scores if hasattr(query_response, "scores") else []
+                    )
+                    doc_ids_from_chunks = _process_chunks_for_documents(
+                        query_response.chunks, offline
+                    )
+                    rag_chunks = _convert_chunks_to_rag_format(
+                        retrieved_chunks, retrieved_scores, offline
+                    )
+                    logger.info("Retrieved %d chunks from Solr vector DB", len(rag_chunks))
+        except Exception as e:
+            logger.warning("Failed to query Solr vector database: %s", e)
+            logger.debug("Solr vector DB query error details: %s", traceback.format_exc())
 
-                # Extract doc_ids from chunks for referenced_documents
-                doc_ids_from_chunks = _process_chunks_for_documents(
-                    query_response.chunks, offline
+    # BYOK RAG path - query BYOK vector stores when configured
+    byok_rags = getattr(configuration.configuration, 'byok_rag', []) if hasattr(configuration, 'configuration') else []
+    if not byok_rags:
+        # Try alternative access pattern
+        try:
+            byok_rags = configuration._configuration.byok_rag if configuration._configuration else []
+        except AttributeError:
+            byok_rags = []
+
+    if byok_rags:
+        logger.info("Found %d BYOK RAG stores, querying...", len(byok_rags))
+        for brag in byok_rags:
+            try:
+                vector_store_id = brag.vector_db_id
+                logger.info("Querying BYOK RAG vector store: %s", vector_store_id)
+                query_response = await client.vector_io.query(
+                    vector_store_id=vector_store_id,
+                    query=query_request.query,
+                    params={"max_chunks": 5},
                 )
+                if query_response.chunks:
+                    byok_chunks = query_response.chunks
+                    byok_scores = (
+                        query_response.scores if hasattr(query_response, "scores") else []
+                    )
+                    retrieved_chunks.extend(byok_chunks)
+                    retrieved_scores.extend(byok_scores)
 
-                # Convert retrieved chunks to RAGChunk format
-                rag_chunks = _convert_chunks_to_rag_format(
-                    retrieved_chunks, retrieved_scores, offline
+                    # Process documents from BYOK chunks
+                    byok_docs = _process_chunks_for_documents(byok_chunks, False)
+                    doc_ids_from_chunks.extend(byok_docs)
+
+                    # Convert to RAG format
+                    byok_rag_chunks = _convert_chunks_to_rag_format(
+                        byok_chunks, byok_scores, False
+                    )
+                    rag_chunks.extend(byok_rag_chunks)
+                    logger.info(
+                        "Retrieved %d chunks from BYOK RAG store %s",
+                        len(byok_rag_chunks), vector_store_id,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "Failed to query BYOK RAG store %s: %s",
+                    brag.vector_db_id, e,
                 )
-                logger.info("Retrieved %d chunks from vector DB", len(rag_chunks))
-
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.warning("Failed to query vector database for chunks: %s", e)
-        logger.debug("Vector DB query error details: %s", traceback.format_exc())
-        # Continue without RAG chunks
+                logger.debug("BYOK RAG query error: %s", traceback.format_exc())
+    else:
+        if not _is_solr_enabled(configuration):
+            logger.info("No Solr or BYOK RAG configured, skipping vector search")
 
     return retrieved_chunks, retrieved_scores, doc_ids_from_chunks, rag_chunks
 

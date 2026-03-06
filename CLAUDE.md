@@ -1,3 +1,8 @@
+---
+description: 
+alwaysApply: true
+---
+
 # Lightspeed Core Stack Development Guide
 
 ## Project Overview
