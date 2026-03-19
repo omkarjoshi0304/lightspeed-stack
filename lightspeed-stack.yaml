@@ -31,15 +31,15 @@ conversation_cache:
 authentication:
   module: "noop"
 
-# OKP Solr for supplementary RAG
-solr:
-  enabled: false
-  offline: true
+# Note: 'solr' field removed - not supported in this version
+# Use 'okp' and 'rag' configuration instead if needed
 
 mcp_servers:
   - name: "rhos-mcps-openstack"
     provider_id: "model-context-protocol"
     url: "http://localhost:3000/openstack"
+    authorization_headers:
+      Authorization: "/Users/ojoshi/.lightspeed-secrets/mcp-token"
 
 
 byok_rag:
@@ -49,3 +49,9 @@ byok_rag:
     embedding_dimension: 768
     vector_db_id: "vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360"
     db_path: "/Users/ojoshi/Documents/GitHub/rag-content/vector_db/faiss_store.db"
+
+rag:
+  inline:
+    - vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360
+  tool:
+    - vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360

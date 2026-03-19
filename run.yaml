@@ -174,15 +174,6 @@ registered_resources:
     embedding_model: sentence-transformers/all-mpnet-base-v2
     embedding_dimension: 768
 
-  models: []
-  shields:
-  - shield_id: llama-guard
-    provider_id: llama-guard
-    provider_shield_id: openai/gpt-4o-mini
-  vector_stores: []
-  datasets: []
-  scoring_fns: []
-  benchmarks: []
   tool_groups:
   - toolgroup_id: builtin::rag # Register the RAG tool
     provider_id: rag-runtime
