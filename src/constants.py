@@ -2,7 +2,7 @@
 
 # Minimal and maximal supported Llama Stack version
 MINIMAL_SUPPORTED_LLAMA_STACK_VERSION = "0.2.17"
-MAXIMAL_SUPPORTED_LLAMA_STACK_VERSION = "0.4.3"
+MAXIMAL_SUPPORTED_LLAMA_STACK_VERSION = "0.5.2"
 
 UNABLE_TO_PROCESS_RESPONSE = "Unable to process this request"
 
@@ -123,6 +123,8 @@ SUPPORTED_AUTHENTICATION_MODULES = frozenset(
     }
 )
 DEFAULT_AUTHENTICATION_MODULE = AUTH_MOD_NOOP
+# Maximum allowed size for base64-encoded x-rh-identity header (bytes)
+DEFAULT_RH_IDENTITY_MAX_HEADER_SIZE = 8192
 DEFAULT_JWT_UID_CLAIM = "user_id"
 DEFAULT_JWT_USER_NAME_CLAIM = "username"
 
@@ -184,6 +186,9 @@ SOLR_VECTOR_SEARCH_DEFAULT_K = 5
 SOLR_VECTOR_SEARCH_DEFAULT_SCORE_THRESHOLD = 0.3
 SOLR_VECTOR_SEARCH_DEFAULT_MODE = "hybrid"
 
+# Internal Solr filter always applied to restrict results to chunk documents
+SOLR_CHUNK_FILTER_QUERY = "is_chunk:true"
+
 # SOLR OKP RAG
 MIMIR_DOC_URL = "https://mimir.corp.redhat.com"
 
@@ -214,3 +219,5 @@ DEFAULT_LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(lineno)d %(message)
 # Environment variable to force StreamHandler instead of RichHandler
 # Set to any non-empty value to disable RichHandler
 LIGHTSPEED_STACK_DISABLE_RICH_HANDLER_ENV_VAR = "LIGHTSPEED_STACK_DISABLE_RICH_HANDLER"
+
+DEFAULT_VIOLATION_MESSAGE = "I cannot process this request due to policy restrictions."

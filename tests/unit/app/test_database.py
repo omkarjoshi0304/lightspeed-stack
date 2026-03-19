@@ -2,7 +2,7 @@
 
 # pylint: disable=protected-access
 
-from typing import Generator
+from collections.abc import Generator
 from pathlib import Path
 import tempfile
 import pytest

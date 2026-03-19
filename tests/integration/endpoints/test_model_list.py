@@ -1,6 +1,7 @@
 """Integration tests for the /models endpoint (using Responses API)."""
 
-from typing import Any, Generator
+from typing import Any
+from collections.abc import Generator
 
 import pytest
 from fastapi import Request

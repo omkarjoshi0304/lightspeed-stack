@@ -4,7 +4,8 @@
 
 import logging
 import time
-from typing import Any, Generator
+from typing import Any
+from collections.abc import Generator
 
 import pytest
 from azure.core.credentials import AccessToken

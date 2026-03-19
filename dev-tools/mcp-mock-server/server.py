@@ -24,7 +24,7 @@ import subprocess
 import sys
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +38,7 @@ class MCPMockHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: Any) -> None:
         """Log requests with timestamp."""  # pylint: disable=redefined-builtin
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{timestamp}] {format % args}")
 
     def _capture_headers(self) -> None:
@@ -46,13 +46,12 @@ class MCPMockHandler(BaseHTTPRequestHandler):
         last_headers.clear()
 
         # Capture all headers for debugging
-        for header_name, value in self.headers.items():
-            last_headers[header_name] = value
+        last_headers.update(dict(self.headers.items()))
 
         # Log the request
         request_log.append(
             {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=UTC).isoformat(),
                 "method": self.command,
                 "path": self.path,
                 "headers": dict(last_headers),

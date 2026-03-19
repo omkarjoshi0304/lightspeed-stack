@@ -282,9 +282,15 @@
           },
           "db_path": {
             "description": "Path to RAG database.",
-            "format": "file-path",
             "title": "DB path",
             "type": "string"
+          },
+          "score_multiplier": {
+            "default": 1.0,
+            "description": "Multiplier applied to relevance scores from this vector store. Used to weight results when querying multiple knowledge sources. Values > 1 boost this store's results; values < 1 reduce them.",
+            "minimum": 0,
+            "title": "Score multiplier",
+            "type": "number"
           }
         },
         "required": [
@@ -467,18 +473,15 @@
             "title": "Deployment environment",
             "type": "string"
           },
-          "solr": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SolrConfiguration"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Configuration for Solr vector search operations.",
-            "title": "Solr configuration"
+          "rag": {
+            "$ref": "#/components/schemas/RagConfiguration",
+            "description": "Configuration for all RAG strategies (inline and tool-based).",
+            "title": "RAG configuration"
+          },
+          "okp": {
+            "$ref": "#/components/schemas/OkpConfiguration",
+            "description": "OKP provider settings. Only used when 'okp' is listed in rag.inline or rag.tool.",
+            "title": "OKP configuration"
           }
         },
         "required": [
@@ -898,6 +901,26 @@
         "title": "ModelContextProtocolServer",
         "type": "object"
       },
+      "OkpConfiguration": {
+        "additionalProperties": false,
+        "description": "OKP (Offline Knowledge Portal) provider configuration.\n\nControls provider-specific behaviour for the OKP vector store.\nOnly relevant when ``\"okp\"`` is listed in ``rag.inline`` or ``rag.tool``.",
+        "properties": {
+          "offline": {
+            "default": true,
+            "description": "When True, use parent_id for OKP chunk source URLs. When False, use reference_url for chunk source URLs.",
+            "title": "OKP offline mode",
+            "type": "boolean"
+          },
+          "chunk_filter_query": {
+            "default": "is_chunk:true",
+            "description": "OKP filter query applied to every OKP search request. Defaults to 'is_chunk:true' to restrict results to chunk documents. To add extra constraints, extend the expression using boolean syntax, e.g. 'is_chunk:true AND product:*openshift*'.",
+            "title": "OKP chunk filter query",
+            "type": "string"
+          }
+        },
+        "title": "OkpConfiguration",
+        "type": "object"
+      },
       "PostgreSQLDatabaseConfiguration": {
         "additionalProperties": false,
         "description": "PostgreSQL database configuration.\n\nPostgreSQL database is used by Lightspeed Core Stack service for storing\ninformation about conversation IDs. It can also be leveraged to store\nconversation history and information about quota usage.\n\nUseful resources:\n\n- [Psycopg: connection classes](https://www.psycopg.org/psycopg3/docs/api/connections.html)\n- [PostgreSQL connection strings](https://www.connectionstrings.com/postgresql/)\n- [How to Use PostgreSQL in Python](https://www.freecodecamp.org/news/postgresql-in-python/)",
@@ -1110,6 +1133,30 @@
         "title": "RHIdentityConfiguration",
         "type": "object"
       },
+      "RagConfiguration": {
+        "additionalProperties": false,
+        "description": "RAG strategy configuration.\n\nControls which RAG sources are used for inline and tool-based retrieval.\n\nEach strategy lists RAG IDs to include. The special ID ``\"okp\"`` defined in constants,\nactivates the OKP provider; all other IDs refer to entries in ``byok_rag``.\n\nBackward compatibility:\n    - ``inline`` defaults to ``[]`` (no inline RAG).\n    - ``tool`` defaults to ``[]`` (no tool RAG).\n\nIf no RAG strategy is defined (inline and tool are empty),\nthe RAG tool will register all stores available to llama-stack.",
+        "properties": {
+          "inline": {
+            "description": "RAG IDs whose sources are injected as context before the LLM call. Use 'okp' to enable OKP inline RAG. Empty by default (no inline RAG).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Inline RAG IDs",
+            "type": "array"
+          },
+          "tool": {
+            "description": "RAG IDs made available to the LLM as a file_search tool. Use 'okp' to include the OKP vector store. When omitted, all registered BYOK vector stores are used (backward compatibility).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tool RAG IDs",
+            "type": "array"
+          }
+        },
+        "title": "RagConfiguration",
+        "type": "object"
+      },
       "SQLiteDatabaseConfiguration": {
         "additionalProperties": false,
         "description": "SQLite database configuration.",
@@ -1193,26 +1240,6 @@
           }
         },
         "title": "ServiceConfiguration",
-        "type": "object"
-      },
-      "SolrConfiguration": {
-        "additionalProperties": false,
-        "description": "Solr configuration for vector search queries.\n\nControls whether to use offline or online mode when building document URLs\nfrom vector search results, and enables/disables Solr vector IO functionality.",
-        "properties": {
-          "enabled": {
-            "default": false,
-            "description": "When True, enables Solr vector IO functionality for vector search queries. When False, disables Solr vector search processing.",
-            "title": "Solr enabled",
-            "type": "boolean"
-          },
-          "offline": {
-            "default": true,
-            "description": "When True, use parent_id for chunk source URLs. When False, use reference_url for chunk source URLs.",
-            "title": "Offline mode",
-            "type": "boolean"
-          }
-        },
-        "title": "SolrConfiguration",
         "type": "object"
       },
       "SplunkConfiguration": {

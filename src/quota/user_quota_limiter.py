@@ -1,7 +1,7 @@
 """Simple user quota limiter where each user has a fixed quota."""
 
-from models.config import QuotaHandlersConfiguration
 from log import get_logger
+from models.config import QuotaHandlersConfiguration
 from quota.revokable_quota_limiter import RevokableQuotaLimiter
 
 logger = get_logger(__name__)

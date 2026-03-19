@@ -2,13 +2,13 @@
 
 from fastapi import HTTPException, Request
 
+from authentication.interface import AuthInterface
 from constants import (
     DEFAULT_USER_NAME,
     DEFAULT_USER_UID,
-    NO_USER_TOKEN,
     DEFAULT_VIRTUAL_PATH,
+    NO_USER_TOKEN,
 )
-from authentication.interface import AuthInterface
 from log import get_logger
 
 logger = get_logger(__name__)

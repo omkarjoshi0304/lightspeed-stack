@@ -1,7 +1,7 @@
 """Integration tests for the /streaming_query endpoint (using Responses API)."""
 
-from collections.abc import AsyncIterator
-from typing import Any, Generator
+from collections.abc import AsyncIterator, Generator
+from typing import Any
 
 import pytest
 from fastapi import HTTPException, Request, status

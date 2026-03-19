@@ -41,11 +41,12 @@ class "AzureEntraIdConfiguration" as src.models.config.AzureEntraIdConfiguration
   tenant_id
 }
 class "ByokRag" as src.models.config.ByokRag {
-  db_path
+  db_path : str
   embedding_dimension
   embedding_model : str
   rag_id : str
   rag_type : str
+  score_multiplier : float
   vector_db_id : str
 }
 class "CORSConfiguration" as src.models.config.CORSConfiguration {
@@ -69,9 +70,10 @@ class "Configuration" as src.models.config.Configuration {
   llama_stack
   mcp_servers : list[ModelContextProtocolServer]
   name : str
+  okp
   quota_handlers
+  rag
   service
-  solr : Optional[SolrConfiguration]
   splunk : Optional[SplunkConfiguration]
   user_data_collection
   dump(filename: str | Path) -> None
@@ -160,6 +162,10 @@ class "ModelContextProtocolServer" as src.models.config.ModelContextProtocolServ
   resolve_auth_headers() -> Self
   validate_headers(value: list[str]) -> list[str]
 }
+class "OkpConfiguration" as src.models.config.OkpConfiguration {
+  chunk_filter_query : Optional[str]
+  offline : bool
+}
 class "PostgreSQLDatabaseConfiguration" as src.models.config.PostgreSQLDatabaseConfiguration {
   ca_cert_path : Optional[FilePath]
   db : str
@@ -194,6 +200,10 @@ class "QuotaSchedulerConfiguration" as src.models.config.QuotaSchedulerConfigura
 class "RHIdentityConfiguration" as src.models.config.RHIdentityConfiguration {
   required_entitlements : Optional[list[str]]
 }
+class "RagConfiguration" as src.models.config.RagConfiguration {
+  inline : list[str]
+  tool : list[str]
+}
 class "SQLiteDatabaseConfiguration" as src.models.config.SQLiteDatabaseConfiguration {
   db_path : str
 }
@@ -210,10 +220,6 @@ class "ServiceConfiguration" as src.models.config.ServiceConfiguration {
   workers
   check_service_configuration() -> Self
   validate_root_path(value: str) -> str
-}
-class "SolrConfiguration" as src.models.config.SolrConfiguration {
-  enabled : bool
-  offline : bool
 }
 class "SplunkConfiguration" as src.models.config.SplunkConfiguration {
   enabled : bool
@@ -257,14 +263,15 @@ src.models.config.JwtConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.JwtRoleRule --|> src.models.config.ConfigurationBase
 src.models.config.LlamaStackConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.ModelContextProtocolServer --|> src.models.config.ConfigurationBase
+src.models.config.OkpConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.PostgreSQLDatabaseConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.QuotaHandlersConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.QuotaLimiterConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.QuotaSchedulerConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.RHIdentityConfiguration --|> src.models.config.ConfigurationBase
+src.models.config.RagConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.SQLiteDatabaseConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.ServiceConfiguration --|> src.models.config.ConfigurationBase
-src.models.config.SolrConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.SplunkConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.TLSConfiguration --|> src.models.config.ConfigurationBase
 src.models.config.UserDataCollection --|> src.models.config.ConfigurationBase
@@ -278,8 +285,10 @@ src.models.config.InferenceConfiguration --* src.models.config.Configuration : i
 src.models.config.JsonPathOperator --* src.models.config.JwtRoleRule : operator
 src.models.config.JwtConfiguration --* src.models.config.JwkConfiguration : jwt_configuration
 src.models.config.LlamaStackConfiguration --* src.models.config.Configuration : llama_stack
+src.models.config.OkpConfiguration --* src.models.config.Configuration : okp
 src.models.config.QuotaHandlersConfiguration --* src.models.config.Configuration : quota_handlers
 src.models.config.QuotaSchedulerConfiguration --* src.models.config.QuotaHandlersConfiguration : scheduler
+src.models.config.RagConfiguration --* src.models.config.Configuration : rag
 src.models.config.SQLiteDatabaseConfiguration --* src.models.config.DatabaseConfiguration : sqlite
 src.models.config.ServiceConfiguration --* src.models.config.Configuration : service
 src.models.config.TLSConfiguration --* src.models.config.ServiceConfiguration : tls_config

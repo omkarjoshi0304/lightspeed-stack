@@ -30,16 +30,15 @@ two user quota limiters can be set to:
 - reset quota to 10,000,000 tokens each month
 """
 
-from abc import ABC, abstractmethod
-
-from typing import Optional
-
 import datetime
 import sqlite3
+from abc import ABC, abstractmethod
+from typing import Optional
+
 import psycopg2
 
 from log import get_logger
-from models.config import SQLiteDatabaseConfiguration, PostgreSQLDatabaseConfiguration
+from models.config import PostgreSQLDatabaseConfiguration, SQLiteDatabaseConfiguration
 from quota.connect_pg import connect_pg
 from quota.connect_sqlite import connect_sqlite
 

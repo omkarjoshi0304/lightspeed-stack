@@ -49,7 +49,7 @@ def parse_llama_stack_model(model: Any) -> dict[str, Any]:
         if k not in ("provider_id", "provider_resource_id", "model_type")
     }
 
-    legacy_model = {
+    return {
         "identifier": getattr(model, "id", ""),
         "metadata": metadata,
         "api_model_type": model_type,
@@ -58,7 +58,6 @@ def parse_llama_stack_model(model: Any) -> dict[str, Any]:
         "provider_resource_id": str(custom_metadata.get("provider_resource_id", "")),
         "model_type": model_type,
     }
-    return legacy_model
 
 
 models_responses: dict[int | str, dict[str, Any]] = {

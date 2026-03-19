@@ -1,6 +1,7 @@
 """Decorator that makes sure the object is 'connected' according to it's connected predicate."""
 
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 
 def connection(f: Callable) -> Callable:

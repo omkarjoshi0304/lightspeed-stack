@@ -1,12 +1,11 @@
 """Quota limiter factory class."""
 
-from log import get_logger
 import constants
+from log import get_logger
 from models.config import QuotaHandlersConfiguration
-
-from quota.user_quota_limiter import UserQuotaLimiter
 from quota.cluster_quota_limiter import ClusterQuotaLimiter
 from quota.quota_limiter import QuotaLimiter
+from quota.user_quota_limiter import UserQuotaLimiter
 
 logger = get_logger(__name__)
 

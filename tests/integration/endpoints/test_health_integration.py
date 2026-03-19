@@ -1,6 +1,7 @@
 """Integration tests for the /health endpoint."""
 
-from typing import Any, Generator
+from typing import Any
+from collections.abc import Generator
 
 import pytest
 from fastapi import Response

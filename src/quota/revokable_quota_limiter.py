@@ -1,24 +1,24 @@
 """Simple quota limiter where quota can be revoked."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
-from models.config import QuotaHandlersConfiguration
 from log import get_logger
-from utils.connection_decorator import connection
+from models.config import QuotaHandlersConfiguration
 from quota.quota_exceed_error import QuotaExceedError
 from quota.quota_limiter import QuotaLimiter
 from quota.sql import (
     CREATE_QUOTA_TABLE_PG,
     CREATE_QUOTA_TABLE_SQLITE,
-    UPDATE_AVAILABLE_QUOTA_PG,
-    UPDATE_AVAILABLE_QUOTA_SQLITE,
+    INIT_QUOTA_PG,
+    INIT_QUOTA_SQLITE,
     SELECT_QUOTA_PG,
     SELECT_QUOTA_SQLITE,
     SET_AVAILABLE_QUOTA_PG,
     SET_AVAILABLE_QUOTA_SQLITE,
-    INIT_QUOTA_PG,
-    INIT_QUOTA_SQLITE,
+    UPDATE_AVAILABLE_QUOTA_PG,
+    UPDATE_AVAILABLE_QUOTA_SQLITE,
 )
+from utils.connection_decorator import connection
 
 logger = get_logger(__name__)
 
@@ -140,7 +140,7 @@ class RevokableQuotaLimiter(QuotaLimiter):
                               revoked.
         """
         # timestamp to be used
-        revoked_at = datetime.now()
+        revoked_at = datetime.now(tz=UTC)
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -188,7 +188,7 @@ class RevokableQuotaLimiter(QuotaLimiter):
             subject_id (str): Identifier of the subject whose quota will be increased.
         """
         # timestamp to be used
-        updated_at = datetime.now()
+        updated_at = datetime.now(tz=UTC)
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -286,7 +286,7 @@ class RevokableQuotaLimiter(QuotaLimiter):
             change.
         """
         # timestamp to be used
-        updated_at = datetime.now()
+        updated_at = datetime.now(tz=UTC)
 
         to_be_consumed = input_tokens + output_tokens
 
@@ -329,7 +329,7 @@ class RevokableQuotaLimiter(QuotaLimiter):
             initialize. Defaults to empty string.
         """
         # timestamp to be used
-        revoked_at = datetime.now()
+        revoked_at = datetime.now(tz=UTC)
 
         if self.sqlite_connection_config is not None:
             cursor = self.connection.cursor()

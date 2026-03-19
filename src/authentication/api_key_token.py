@@ -8,15 +8,15 @@ the value equals to the API Key, given from configuration parameter.
 
 import secrets
 
-from fastapi import Request, HTTPException, status
+from fastapi import HTTPException, Request, status
 
-from constants import (
-    DEFAULT_USER_NAME,
-    DEFAULT_VIRTUAL_PATH,
-    DEFAULT_USER_UID,
-)
 from authentication.interface import AuthInterface
 from authentication.utils import extract_user_token
+from constants import (
+    DEFAULT_USER_NAME,
+    DEFAULT_USER_UID,
+    DEFAULT_VIRTUAL_PATH,
+)
 from log import get_logger
 from models.config import APIKeyTokenConfiguration
 

@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-Apache-blue)](https://github.com/lightspeed-core/lightspeed-stack/blob/main/LICENSE)
 [![made-with-python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)](https://www.python.org/)
 [![Required Python version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Flightspeed-core%2Flightspeed-stack%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](https://www.python.org/)
-[![Tag](https://img.shields.io/github/v/tag/lightspeed-core/lightspeed-stack)](https://github.com/lightspeed-core/lightspeed-stack/releases/tag/0.4.1)
+[![Tag](https://img.shields.io/github/v/tag/lightspeed-core/lightspeed-stack)](https://github.com/lightspeed-core/lightspeed-stack/releases/tag/0.4.2)
 
 Lightspeed Core Stack (LCS) is an AI-powered assistant that provides answers to product questions using backend LLM services, agents, and RAG databases.
 
@@ -829,7 +829,6 @@ Usage: make <OPTIONS> ... <TARGETS>
 Available targets are:
 
 run                               Run the service locally
-help                              Show this help screen
 run-llama-stack                   Start Llama Stack with enriched config (for local service mode)
 test-unit                         Run the unit tests
 test-integration                  Run integration tests tests
@@ -842,7 +841,6 @@ format                            Format the code into unified format
 schema                            Generate OpenAPI schema file
 openapi-doc                       Generate OpenAPI documentation
 generate-documentation            Generate documentation
-requirements.txt                  Generate requirements.txt file containing hashes for all non-devel packages
 doc                               Generate documentation for developers
 docs/config.puml                  Generate PlantUML class diagram for configuration
 docs/config.png                   Generate an image with configuration graph
@@ -857,8 +855,11 @@ verify                            Run all linters
 distribution-archives             Generate distribution archives to be uploaded into Python registry
 upload-distribution-archives      Upload distribution archives into Python registry
 konflux-requirements              Generate hermetic requirements.*.txt file for konflux build
-konflux-rpm-lock 	              Generate rpm.lock.yaml file for konflux build
+konflux-rpm-lock                  Generate rpm.lock.yaml file for konflux build
+help                              Show this help screen
 ```
+
+
 
 ## Running Linux container image
 

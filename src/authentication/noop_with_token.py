@@ -11,13 +11,13 @@ Behavior:
 
 from fastapi import HTTPException, Request
 
+from authentication.interface import AuthInterface
+from authentication.utils import extract_user_token
 from constants import (
     DEFAULT_USER_NAME,
     DEFAULT_USER_UID,
     DEFAULT_VIRTUAL_PATH,
 )
-from authentication.interface import AuthInterface
-from authentication.utils import extract_user_token
 from log import get_logger
 
 logger = get_logger(__name__)

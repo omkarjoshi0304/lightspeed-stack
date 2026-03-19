@@ -2,23 +2,52 @@
 
 from enum import Enum
 from typing import Optional, Any
-from typing_extensions import Self
+from typing import Self
 
 from llama_stack_api.openai_responses import (
     OpenAIResponseInputToolChoice as ToolChoice,
-    OpenAIResponseInputToolChoiceMode as ToolChoiceMode,
     OpenAIResponseInputTool as InputTool,
     OpenAIResponsePrompt as Prompt,
     OpenAIResponseText as Text,
+    OpenAIResponseToolMCP as OutputToolMCP,
+    OpenAIResponseReasoning as Reasoning,
 )
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from constants import MEDIA_TYPE_JSON, MEDIA_TYPE_TEXT
+from constants import (
+    MEDIA_TYPE_JSON,
+    MEDIA_TYPE_TEXT,
+    MCP_AUTH_CLIENT,
+    MCP_AUTH_KUBERNETES,
+    MCP_AUTH_OAUTH,
+)
 from log import get_logger
 from utils import suid
 from utils.types import IncludeParameter, ResponseInput
 
 logger = get_logger(__name__)
+
+# Attribute names that are echoed back in the response.
+_ECHOED_FIELDS = set(
+    {
+        "instructions",
+        "max_tool_calls",
+        "max_output_tokens",
+        "metadata",
+        "model",
+        "parallel_tool_calls",
+        "previous_response_id",
+        "prompt",
+        "reasoning",
+        "safety_identifier",
+        "temperature",
+        "top_p",
+        "truncation",
+        "text",
+        "tool_choice",
+        "store",
+    }
+)
 
 
 class Attachment(BaseModel):
@@ -179,8 +208,7 @@ class QueryRequest(BaseModel):
     shield_ids: Optional[list[str]] = Field(
         None,
         description="Optional list of safety shield IDs to apply. "
-        "If None, all configured shields are used. "
-        "If provided, must contain at least one valid shield ID (empty list raises 422 error).",
+        "If None, all configured shields are used. ",
         examples=["llama-guard", "custom-shield"],
     )
 
@@ -503,8 +531,7 @@ class FeedbackRequest(BaseModel):
         if len(value) == 0:
             return None  # Convert empty list to None for consistency
 
-        unique_categories = list(dict.fromkeys(value))  # don't lose ordering
-        return unique_categories
+        return list(dict.fromkeys(value))  # don't lose ordering
 
     @model_validator(mode="after")
     def check_feedback_provided(self) -> Self:
@@ -616,6 +643,7 @@ class ResponsesRequest(BaseModel):
         instructions: System instructions or guidelines provided to the model (acts as
             the system prompt).
         max_infer_iters: Maximum number of inference iterations the model can perform.
+        max_output_tokens: Maximum number of tokens allowed in the response.
         max_tool_calls: Maximum number of tool calls allowed in a single response.
         metadata: Custom metadata dictionary with key-value pairs for tracking or logging.
         parallel_tool_calls: Whether the model can make multiple tool calls in parallel.
@@ -623,17 +651,21 @@ class ResponsesRequest(BaseModel):
             conversation. Mutually exclusive with conversation.
         prompt: Prompt object containing a template with variables for dynamic
             substitution.
+        reasoning: Reasoning configuration for the response.
+        safety_identifier: Safety identifier for the response.
         store: Whether to store the response in conversation history. Defaults to True.
         stream: Whether to stream the response as it is generated. Defaults to False.
         temperature: Sampling temperature controlling randomness (typically 0.0–2.0).
         text: Text response configuration specifying output format constraints (JSON
             schema, JSON object, or plain text).
         tool_choice: Tool selection strategy ("auto", "required", "none", or specific
-            tool configuration). Defaults to "auto".
+            tool configuration).
         tools: List of tools available to the model (file search, web search, function
             calls, MCP tools). Defaults to all tools available to the model.
         generate_topic_summary: LCORE-specific flag indicating whether to generate a
             topic summary for new conversations. Defaults to True.
+        shield_ids: LCORE-specific list of safety shield IDs to apply. If None, all
+            configured shields are used.
         solr: LCORE-specific Solr vector_io provider query parameters (e.g. filter
             queries). Optional.
     """
@@ -644,18 +676,23 @@ class ResponsesRequest(BaseModel):
     include: Optional[list[IncludeParameter]] = None
     instructions: Optional[str] = None
     max_infer_iters: Optional[int] = None
+    max_output_tokens: Optional[int] = None
     max_tool_calls: Optional[int] = None
     metadata: Optional[dict[str, str]] = None
     parallel_tool_calls: Optional[bool] = None
     previous_response_id: Optional[str] = None
     prompt: Optional[Prompt] = None
+    reasoning: Optional[Reasoning] = None
+    safety_identifier: Optional[str] = None
     store: bool = True
     stream: bool = False
     temperature: Optional[float] = None
     text: Optional[Text] = None
-    tool_choice: Optional[ToolChoice] = ToolChoiceMode.auto
+    tool_choice: Optional[ToolChoice] = None
     tools: Optional[list[InputTool]] = None
+    # LCORE-specific attributes
     generate_topic_summary: Optional[bool] = True
+    shield_ids: Optional[list[str]] = None
     solr: Optional[dict[str, Any]] = None
 
     model_config = {
@@ -663,40 +700,11 @@ class ResponsesRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
-                    "input": "What is Kubernetes?",
+                    "input": "Hello World!",
                     "model": "openai/gpt-4o-mini",
-                    "conversation": "conv_0d21ba731f21f798dc9680125d5d6f493e4a7ab79f25670e",
                     "instructions": "You are a helpful assistant",
-                    "include": ["message.output_text.logprobs"],
-                    "max_tool_calls": 5,
-                    "metadata": {"source": "api"},
-                    "parallel_tool_calls": True,
-                    "prompt": {
-                        "id": "prompt_123",
-                        "variables": {
-                            "topic": {"type": "input_text", "text": "Kubernetes"}
-                        },
-                        "version": "1.0",
-                    },
                     "store": True,
                     "stream": False,
-                    "temperature": 0.7,
-                    "text": {
-                        "format": {
-                            "type": "json_schema",
-                            "schema": {
-                                "type": "object",
-                                "properties": {"answer": {"type": "string"}},
-                            },
-                        }
-                    },
-                    "tool_choice": "auto",
-                    "tools": [
-                        {
-                            "type": "file_search",
-                            "vector_store_ids": ["vs_123"],
-                        }
-                    ],
                     "generate_topic_summary": True,
                 }
             ]
@@ -730,4 +738,188 @@ class ResponsesRequest(BaseModel):
         """Validate that a conversation identifier matches the expected SUID format."""
         if value and not suid.check_suid(value):
             raise ValueError(f"Improper conversation ID '{value}'")
+        return value
+
+    @field_validator("previous_response_id")
+    @classmethod
+    def check_previous_response_id(cls, value: Optional[str]) -> Optional[str]:
+        """Validate that previous_response_id does not start with 'modr'."""
+        if value is not None and value.startswith("modr"):
+            raise ValueError("You cannot provide context by moderation response.")
+        return value
+
+    def echoed_params(self) -> dict[str, Any]:
+        """Dump attributes that are echoed back in the response.
+
+        The tools attribute is converted from input tool to output tool model.
+
+        Returns:
+            Dict of echoed attributes.
+        """
+        data = self.model_dump(include=_ECHOED_FIELDS)
+        if self.tools is not None:
+            data["tools"] = [
+                (
+                    OutputToolMCP.model_validate(t.model_dump()).model_dump()
+                    if t.type == "mcp"
+                    else t.model_dump()
+                )
+                for t in self.tools
+            ]
+
+        return data
+
+
+class MCPServerRegistrationRequest(BaseModel):
+    """Request model for dynamically registering an MCP server.
+
+    Attributes:
+        name: Unique name for the MCP server.
+        url: URL of the MCP server endpoint.
+        provider_id: MCP provider identification (defaults to "model-context-protocol").
+        authorization_headers: Optional headers to send to the MCP server.
+        headers: Optional list of HTTP header names to forward from incoming requests.
+        timeout: Optional request timeout in seconds.
+
+    Example:
+        ```python
+        request = MCPServerRegistrationRequest(
+            name="my-tools",
+            url="http://localhost:8888/mcp",
+        )
+        ```
+    """
+
+    name: str = Field(
+        ...,
+        description="Unique name for the MCP server",
+        examples=["my-mcp-tools"],
+        min_length=1,
+        max_length=256,
+    )
+
+    url: str = Field(
+        ...,
+        description="URL of the MCP server endpoint",
+        examples=["http://host.docker.internal:7008/api/mcp-actions/v1"],
+    )
+
+    provider_id: str = Field(
+        "model-context-protocol",
+        description="MCP provider identification",
+        examples=["model-context-protocol"],
+    )
+
+    authorization_headers: Optional[dict[str, str]] = Field(
+        default=None,
+        description=(
+            "Headers to send to the MCP server. Values must be one of the "
+            "supported token resolution keywords: "
+            "'client' - forward the caller's token provided via MCP-HEADERS, "
+            "'kubernetes' - use the authenticated user's Kubernetes token, "
+            "'oauth' - use an OAuth token provided via MCP-HEADERS. "
+            "File-path based secrets (used in static YAML config) are not "
+            "supported for dynamically registered servers."
+        ),
+        examples=[
+            {"Authorization": "client"},
+            {"Authorization": "kubernetes"},
+            {"Authorization": "oauth"},
+        ],
+    )
+
+    headers: Optional[list[str]] = Field(
+        default=None,
+        description="List of HTTP header names to forward from incoming requests",
+        examples=[["x-rh-identity"]],
+    )
+
+    timeout: Optional[int] = Field(
+        default=None,
+        description="Request timeout in seconds for the MCP server",
+        gt=0,
+        examples=[30],
+    )
+
+    model_config = {
+        "extra": "forbid",
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "name": "mcp-integration-tools",
+                    "url": "http://host.docker.internal:7008/api/mcp-actions/v1",
+                    "authorization_headers": {"Authorization": "client"},
+                },
+                {
+                    "name": "k8s-internal-service",
+                    "url": "http://internal-mcp.default.svc.cluster.local:8080",
+                    "authorization_headers": {"Authorization": "kubernetes"},
+                },
+                {
+                    "name": "oauth-mcp-server",
+                    "url": "https://mcp.example.com/api",
+                    "authorization_headers": {"Authorization": "oauth"},
+                },
+                {
+                    "name": "test-mcp-server",
+                    "url": "http://host.docker.internal:8888/mcp",
+                    "provider_id": "model-context-protocol",
+                    "headers": ["x-rh-identity"],
+                    "timeout": 30,
+                },
+            ]
+        },
+    }
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        """Validate that URL uses http or https scheme.
+
+        Parameters:
+            value: The URL string to validate.
+
+        Returns:
+            The validated URL string.
+
+        Raises:
+            ValueError: If URL does not start with http:// or https://.
+        """
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("URL must use http:// or https:// scheme")
+        return value
+
+    @field_validator("authorization_headers")
+    @classmethod
+    def validate_authorization_header_values(
+        cls, value: Optional[dict[str, str]]
+    ) -> Optional[dict[str, str]]:
+        """Validate that authorization header values use supported keywords.
+
+        Dynamic registration only supports the token resolution keywords
+        ('client', 'kubernetes', 'oauth'). File-path based secrets are
+        rejected since the API client cannot guarantee files exist on the
+        server filesystem.
+
+        Parameters:
+            value: The authorization headers dict to validate.
+
+        Returns:
+            The validated authorization headers dict.
+
+        Raises:
+            ValueError: If any header value is not a supported keyword.
+        """
+        if value is None:
+            return value
+        allowed = {MCP_AUTH_CLIENT, MCP_AUTH_KUBERNETES, MCP_AUTH_OAUTH}
+        for header_name, header_value in value.items():
+            stripped = header_value.strip()
+            if stripped not in allowed:
+                raise ValueError(
+                    f"Authorization header '{header_name}' has unsupported value "
+                    f"'{stripped}'. Dynamic registration only supports: "
+                    f"{', '.join(sorted(allowed))}. "
+                    "File-path based secrets are only supported in static YAML config."
+                )
         return value

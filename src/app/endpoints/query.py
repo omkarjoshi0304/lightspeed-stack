@@ -1,5 +1,3 @@
-# pylint: disable=too-many-locals,too-many-branches,too-many-nested-blocks
-
 """Handler for REST API call to provide answer to query using Response API."""
 
 import datetime
@@ -36,11 +34,13 @@ from models.responses import (
     UnauthorizedResponse,
     UnprocessableEntityResponse,
 )
+from utils.conversations import append_turn_items_to_conversation
 from utils.endpoints import (
     check_configuration_loaded,
     validate_and_retrieve_conversation,
 )
 from utils.mcp_headers import McpHeaders, mcp_headers_dependency
+from utils.mcp_oauth_probe import check_mcp_auth
 from utils.query import (
     consume_query_tokens,
     handle_known_apistatus_errors,
@@ -58,14 +58,11 @@ from utils.responses import (
     get_topic_summary,
     prepare_responses_params,
 )
-from utils.shields import (
-    append_turn_to_conversation,
-    run_shield_moderation,
-    validate_shield_ids_override,
-)
+from utils.shields import run_shield_moderation, validate_shield_ids_override
 from utils.suid import normalize_conversation_id
 from utils.types import (
     ResponsesApiParams,
+    ShieldModerationResult,
     TurnSummary,
 )
 from utils.vector_search import build_rag_context
@@ -122,6 +119,8 @@ async def query_endpoint_handler(
     """
     check_configuration_loaded(configuration)
 
+    await check_mcp_auth(configuration, mcp_headers)
+
     started_at = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     user_id, _, _skip_userid_check, token = auth
     # Check token availability
@@ -155,14 +154,21 @@ async def query_endpoint_handler(
 
     client = AsyncLlamaStackClientHolder().get_client()
 
-    # Build RAG context from Inline RAG sources
-    inline_rag_context = await build_rag_context(
-        client, query_request.query, query_request.vector_store_ids, query_request.solr
-    )
-
     # Moderation input is the raw user content (query + attachments) without injected RAG
     # context, to avoid false positives from retrieved document content.
     moderation_input = prepare_input(query_request)
+    moderation_result = await run_shield_moderation(
+        client, moderation_input, query_request.shield_ids
+    )
+
+    # Build RAG context from Inline RAG sources
+    inline_rag_context = await build_rag_context(
+        client,
+        moderation_result.decision,
+        query_request.query,
+        query_request.vector_store_ids,
+        query_request.solr,
+    )
 
     # Prepare API request parameters
     responses_params = await prepare_responses_params(
@@ -174,7 +180,7 @@ async def query_endpoint_handler(
         stream=False,
         store=True,
         request_headers=request.headers,
-        inline_rag_context=inline_rag_context.context_text or None,
+        inline_rag_context=inline_rag_context.context_text,
     )
 
     # Handle Azure token refresh if needed
@@ -186,32 +192,22 @@ async def query_endpoint_handler(
     ):
         client = await update_azure_token(client)
 
-    # Build index identification mapping for RAG source resolution
-    vector_store_ids = extract_vector_store_ids_from_tools(responses_params.tools)
-    rag_id_mapping = configuration.rag_id_mapping
-
     # Retrieve response using Responses API
-    turn_summary = await retrieve_response(
-        client,
-        responses_params,
-        query_request.shield_ids,
-        vector_store_ids,
-        rag_id_mapping,
-        moderation_input=moderation_input,
-    )
+    turn_summary = await retrieve_response(client, responses_params, moderation_result)
 
-    # Combine inline RAG results (BYOK + Solr) with tool-based RAG results for the transcript
-    rag_chunks = inline_rag_context.rag_chunks
-    tool_rag_chunks = turn_summary.rag_chunks or []
-    logger.info("RAG as a tool retrieved %d chunks", len(tool_rag_chunks))
-    turn_summary.rag_chunks = rag_chunks + tool_rag_chunks
+    if moderation_result.decision == "passed":
+        # Combine inline RAG results (BYOK + Solr) with tool-based RAG results for the transcript
+        rag_chunks = inline_rag_context.rag_chunks
+        tool_rag_chunks = turn_summary.rag_chunks
+        logger.info("RAG as a tool retrieved %d chunks", len(tool_rag_chunks))
+        turn_summary.rag_chunks = rag_chunks + tool_rag_chunks
 
-    # Add tool-based RAG documents and chunks
-    rag_documents = inline_rag_context.referenced_documents
-    tool_rag_documents = turn_summary.referenced_documents or []
-    turn_summary.referenced_documents = deduplicate_referenced_documents(
-        rag_documents + tool_rag_documents
-    )
+        # Add tool-based RAG documents and chunks
+        rag_documents = inline_rag_context.referenced_documents
+        tool_rag_documents = turn_summary.referenced_documents
+        turn_summary.referenced_documents = deduplicate_referenced_documents(
+            rag_documents + tool_rag_documents
+        )
 
     # Get topic summary for new conversation
     if not user_conversation and query_request.generate_topic_summary:
@@ -234,9 +230,7 @@ async def query_endpoint_handler(
         quota_limiters=configuration.quota_limiters, user_id=user_id
     )
 
-    completed_at = datetime.datetime.now(datetime.timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    completed_at = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     conversation_id = normalize_conversation_id(responses_params.conversation)
 
     logger.info("Storing query results")
@@ -268,13 +262,10 @@ async def query_endpoint_handler(
     )
 
 
-async def retrieve_response(  # pylint: disable=too-many-locals
+async def retrieve_response(
     client: AsyncLlamaStackClient,
     responses_params: ResponsesApiParams,
-    shield_ids: Optional[list[str]] = None,
-    vector_store_ids: Optional[list[str]] = None,
-    rag_id_mapping: Optional[dict[str, str]] = None,
-    moderation_input: Optional[str] = None,
+    moderation_result: ShieldModerationResult,
 ) -> TurnSummary:
     """
     Retrieve response from LLMs and agents.
@@ -285,33 +276,23 @@ async def retrieve_response(  # pylint: disable=too-many-locals
     Parameters:
         client: The AsyncLlamaStackClient to use for the request.
         responses_params: The Responses API parameters.
-        shield_ids: Optional list of shield IDs for moderation.
-        vector_store_ids: Vector store IDs used in the query for source resolution.
-        rag_id_mapping: Mapping from vector_db_id to user-facing rag_id.
-        moderation_input: Text to moderate. Should be the raw user content (query +
-            attachments) without injected RAG context to avoid false positives.
-            Falls back to responses_params.input if not provided.
+        moderation_result: The moderation result.
 
     Returns:
         TurnSummary: Summary of the LLM response content
     """
     response: Optional[OpenAIResponseObject] = None
-    try:
-        moderation_result = await run_shield_moderation(
+    if moderation_result.decision == "blocked":
+        await append_turn_items_to_conversation(
             client,
-            moderation_input or cast(str, responses_params.input),
-            shield_ids,
+            responses_params.conversation,
+            responses_params.input,
+            [moderation_result.refusal_response],
         )
-        if moderation_result.decision == "blocked":
-            # Handle shield moderation blocking
-            violation_message = moderation_result.message
-            await append_turn_to_conversation(
-                client,
-                responses_params.conversation,
-                cast(str, responses_params.input),
-                violation_message,
-            )
-            return TurnSummary(llm_response=violation_message)
+        return TurnSummary(
+            id=moderation_result.moderation_id, llm_response=moderation_result.message
+        )
+    try:
         response = await client.responses.create(
             **responses_params.model_dump(exclude_none=True)
         )
@@ -332,6 +313,8 @@ async def retrieve_response(  # pylint: disable=too-many-locals
         error_response = handle_known_apistatus_errors(e, responses_params.model)
         raise HTTPException(**error_response.model_dump()) from e
 
+    vector_store_ids = extract_vector_store_ids_from_tools(responses_params.tools)
+    rag_id_mapping = configuration.rag_id_mapping
     return build_turn_summary(
         response, responses_params.model, vector_store_ids, rag_id_mapping
     )

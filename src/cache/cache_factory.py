@@ -1,13 +1,13 @@
 """Cache factory class."""
 
 import constants
-from models.config import ConversationHistoryConfiguration
 from cache.cache import Cache
-from cache.noop_cache import NoopCache
 from cache.in_memory_cache import InMemoryCache
+from cache.noop_cache import NoopCache
 from cache.postgres_cache import PostgresCache
 from cache.sqlite_cache import SQLiteCache
 from log import get_logger
+from models.config import ConversationHistoryConfiguration
 
 logger = get_logger(__name__)
 

@@ -1,0 +1,143 @@
+name: E2E Tests for Lightspeed Evaluation
+
+on: [push, pull_request_target]
+
+jobs:
+  e2e_tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    
+    name: "E2E Tests for Lightspeed Evaluation job"
+    
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      E2E_OPENAI_MODEL: ${{ vars.E2E_OPENAI_MODEL }}
+      FAISS_VECTOR_STORE_ID: ${{ vars.FAISS_VECTOR_STORE_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # On PR_TARGET → the fork (or same repo) that opened the PR.
+          # On push      → falls back to the current repository.
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+
+          # On PR_TARGET → the PR head *commit* (reproducible).
+          # On push      → the pushed commit that triggered the workflow.
+          ref: ${{ github.event.pull_request.head.ref || github.sha }}
+
+          # Don’t keep credentials when running untrusted PR code under PR_TARGET.
+          persist-credentials: ${{ github.event_name != 'pull_request_target' }}
+
+      - name: Verify actual git checkout result
+        run: |
+          echo "=== Git Status After Checkout ==="
+          echo "Remote URLs:"
+          git remote -v
+          echo ""
+          echo "Current branch: $(git branch --show-current 2>/dev/null || echo 'detached HEAD')"
+          echo "Current commit: $(git rev-parse HEAD)"
+          echo "Current commit message: $(git log -1 --oneline)"
+          echo ""
+          echo "=== Recent commits ==="
+          git log --oneline -5
+
+      - name: Checkout lightspeed-Evaluation
+        uses: actions/checkout@v4
+        with:
+          repository: lightspeed-core/lightspeed-evaluation
+          path: lightspeed-evaluation
+  
+      - name: Load lightspeed-stack.yaml configuration
+        run: |
+          CONFIG_FILE="./lightspeed-evaluation/tests/integration/lightspeed-stack.yaml"
+          
+          if [ ! -f "${CONFIG_FILE}" ]; then
+            echo "❌ Configuration file not found: ${CONFIG_FILE}"
+            exit 1
+          fi
+          
+          cp "${CONFIG_FILE}" lightspeed-stack.yaml
+          echo "✅ Configuration loaded successfully"
+
+      - name: Select and configure run.yaml
+        run: |
+          CONFIG_FILE="./lightspeed-evaluation/tests/integration/run.yaml"
+
+          if [ ! -f "${CONFIG_FILE}" ]; then
+            echo "❌ Configuration file not found: ${CONFIG_FILE}"
+            exit 1
+          fi
+
+          cp "$CONFIG_FILE" run.yaml
+
+      - name: Show final configuration
+        run: |
+          echo "=== Configuration Preview ==="
+          echo "Providers: $(grep -c "provider_id:" run.yaml)"
+          echo "Models: $(grep -c "model_id:" run.yaml)"
+          echo ""
+          echo "=== lightspeed-stack.yaml ==="
+          grep -A 3 "llama_stack:" lightspeed-stack.yaml
+
+      - name: Run services (Library Mode)
+        env: 
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "Starting service in library mode (1 container)"
+          docker compose -f docker-compose-library.yaml up -d
+
+          if docker compose -f docker-compose-library.yaml ps | grep -E 'Exit|exited|stopped'; then
+            echo "Service failed to start - showing logs:"
+            docker compose -f docker-compose-library.yaml logs
+            exit 1
+          else
+            echo "Service started successfully"
+          fi
+
+      - name: Wait for the LSC
+        run: |
+          echo "Waiting for service on port 8080..."
+          for i in {1..30}; do
+            if curl --output /dev/null --fail http://localhost:8080/v1/models ; then
+              echo "Service is up!"
+              exit 0
+            fi
+            docker compose -f docker-compose-library.yaml logs --tail=30
+            echo "Still waiting..."
+            sleep 2
+          done
+
+          echo "Service did not start in time"
+          exit 1
+
+      - name: Run lightspeed evaluation e2e tests
+        env:
+          TERM: xterm-256color
+          FORCE_COLOR: 1
+        run: |
+          cd lightspeed-evaluation
+          echo "Installing e2e tests dependencies"
+          pip install --break-system-packages uv
+          uv sync
+
+          echo "Running e2e test suite..."
+          make e2e_tests_lcore
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Test failure logs ==="
+          echo "=== lightspeed-stack (library mode) logs ==="
+          docker compose -f docker-compose-library.yaml logs lightspeed-stack
+
+
+      # Cleanup
+      - name: Stop the LSC if in local devel
+        if: ${{ always() && env.ACT }}
+        run: |
+          echo "Stopping containers"
+          echo "++++++++++++++++++++++"
+          sleep 2
+          docker compose -f docker-compose-library.yaml down --rmi all

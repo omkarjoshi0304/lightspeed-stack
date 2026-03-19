@@ -307,7 +307,7 @@ rag:
     - okp             # include OKP context inline
 
   # Tool RAG: the LLM can call file_search to retrieve context on demand
-  # Omit to use all registered BYOK stores (backward compatibility)
+  # If omitted, tool RAG is disabled. If both tool and inline are omitted, all registered stores are used as fallback
   tool:
     - my-docs         # expose this BYOK store as the file_search tool
     - okp             # expose OKP as the file_search tool

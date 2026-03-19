@@ -52,7 +52,14 @@ from models.requests import Attachment, QueryRequest
 from models.responses import InternalServerErrorResponse
 from utils.token_counter import TokenCounter
 from utils.stream_interrupts import StreamInterruptRegistry
-from utils.types import RAGContext, ReferencedDocument, ResponsesApiParams, TurnSummary
+from utils.types import (
+    RAGChunk,
+    RAGContext,
+    ReferencedDocument,
+    ResponsesApiParams,
+    ShieldModerationPassed,
+    TurnSummary,
+)
 
 MOCK_AUTH_STREAMING = (
     "00000001-0001-0001-0001-000000000001",
@@ -354,6 +361,10 @@ class TestStreamingQueryEndpointHandler:
             "app.endpoints.streaming_query.prepare_responses_params",
             new=mocker.AsyncMock(return_value=mock_responses_params),
         )
+        mocker.patch(
+            "app.endpoints.streaming_query.run_shield_moderation",
+            new=mocker.AsyncMock(return_value=ShieldModerationPassed()),
+        )
 
         mocker.patch("app.endpoints.streaming_query.AzureEntraIDManager")
         mocker.patch(
@@ -436,6 +447,10 @@ class TestStreamingQueryEndpointHandler:
         mocker.patch(
             "app.endpoints.streaming_query.prepare_responses_params",
             new=mocker.AsyncMock(return_value=mock_responses_params),
+        )
+        mocker.patch(
+            "app.endpoints.streaming_query.run_shield_moderation",
+            new=mocker.AsyncMock(return_value=ShieldModerationPassed()),
         )
 
         mocker.patch("app.endpoints.streaming_query.AzureEntraIDManager")
@@ -531,6 +546,10 @@ class TestStreamingQueryEndpointHandler:
             "app.endpoints.streaming_query.prepare_responses_params",
             new=mocker.AsyncMock(return_value=mock_responses_params),
         )
+        mocker.patch(
+            "app.endpoints.streaming_query.run_shield_moderation",
+            new=mocker.AsyncMock(return_value=ShieldModerationPassed()),
+        )
 
         mocker.patch("app.endpoints.streaming_query.AzureEntraIDManager")
         mocker.patch(
@@ -622,6 +641,10 @@ class TestStreamingQueryEndpointHandler:
         mocker.patch(
             "app.endpoints.streaming_query.prepare_responses_params",
             new=mocker.AsyncMock(return_value=mock_responses_params),
+        )
+        mocker.patch(
+            "app.endpoints.streaming_query.run_shield_moderation",
+            new=mocker.AsyncMock(return_value=ShieldModerationPassed()),
         )
 
         mocker.patch("app.endpoints.streaming_query.AzureEntraIDManager")
@@ -725,6 +748,10 @@ class TestStreamingQueryEndpointHandler:
             "app.endpoints.streaming_query.extract_provider_and_model_from_model_id",
             return_value=("azure", "model1"),
         )
+        mocker.patch(
+            "app.endpoints.streaming_query.run_shield_moderation",
+            new=mocker.AsyncMock(return_value=ShieldModerationPassed()),
+        )
         mocker.patch("app.endpoints.streaming_query.metrics.llm_calls_total")
 
         async def mock_generator() -> AsyncIterator[str]:
@@ -784,17 +811,15 @@ class TestCreateResponseGenerator:
         mock_context.client = mock_client
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.query_request = QueryRequest(
             query="test"
         )  # pyright: ignore[reportCallIssue]
+        mock_context.moderation_result = ShieldModerationPassed()
 
         async def mock_response_gen() -> AsyncIterator[str]:
             yield "test"
 
-        mocker.patch(
-            "app.endpoints.streaming_query.run_shield_moderation",
-            new=mocker.AsyncMock(return_value=mocker.Mock(blocked=False)),
-        )
         mock_client.responses = mocker.Mock()
         mock_client.responses.create = mocker.AsyncMock(
             return_value=mock_response_gen()
@@ -812,7 +837,7 @@ class TestCreateResponseGenerator:
         )
 
         generator, turn_summary = await retrieve_response_generator(
-            mock_responses_params, mock_context, []
+            mock_responses_params, mock_context
         )
 
         assert isinstance(turn_summary, TurnSummary)
@@ -834,6 +859,7 @@ class TestCreateResponseGenerator:
         mock_context.client = mock_client
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.query_request = QueryRequest(
             query="test", media_type=MEDIA_TYPE_TEXT
         )  # pyright: ignore[reportCallIssue]
@@ -841,17 +867,16 @@ class TestCreateResponseGenerator:
         mock_moderation_result = mocker.Mock()
         mock_moderation_result.decision = "blocked"
         mock_moderation_result.message = "Content blocked"
+        mock_moderation_result.moderation_id = "mod_123"
+        mock_moderation_result.refusal_response = mocker.Mock()
+        mock_context.moderation_result = mock_moderation_result
         mocker.patch(
-            "app.endpoints.streaming_query.run_shield_moderation",
-            new=mocker.AsyncMock(return_value=mock_moderation_result),
-        )
-        mocker.patch(
-            "app.endpoints.streaming_query.append_turn_to_conversation",
+            "app.endpoints.streaming_query.append_turn_items_to_conversation",
             new=mocker.AsyncMock(),
         )
 
         _generator, turn_summary = await retrieve_response_generator(
-            mock_responses_params, mock_context, []
+            mock_responses_params, mock_context
         )
 
         assert isinstance(turn_summary, TurnSummary)
@@ -878,14 +903,12 @@ class TestCreateResponseGenerator:
         mock_context.client = mock_client
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.query_request = QueryRequest(
             query="test"
         )  # pyright: ignore[reportCallIssue]
+        mock_context.moderation_result = ShieldModerationPassed()
 
-        mocker.patch(
-            "app.endpoints.streaming_query.run_shield_moderation",
-            new=mocker.AsyncMock(return_value=mocker.Mock(blocked=False)),
-        )
         mock_request_obj = mocker.Mock()
         mock_client.responses = mocker.Mock()
         mock_client.responses.create = mocker.AsyncMock(
@@ -908,7 +931,7 @@ class TestCreateResponseGenerator:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            await retrieve_response_generator(mock_responses_params, mock_context, [])
+            await retrieve_response_generator(mock_responses_params, mock_context)
 
         assert exc_info.value.status_code == 503
 
@@ -933,14 +956,12 @@ class TestCreateResponseGenerator:
         mock_context.client = mock_client
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.query_request = QueryRequest(
             query="test"
         )  # pyright: ignore[reportCallIssue]
+        mock_context.moderation_result = ShieldModerationPassed()
 
-        mocker.patch(
-            "app.endpoints.streaming_query.run_shield_moderation",
-            new=mocker.AsyncMock(return_value=mocker.Mock(blocked=False)),
-        )
         mock_request_obj = mocker.Mock()
         mock_client.responses = mocker.Mock()
         mock_client.responses.create = mocker.AsyncMock(
@@ -960,7 +981,7 @@ class TestCreateResponseGenerator:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            await retrieve_response_generator(mock_responses_params, mock_context, [])
+            await retrieve_response_generator(mock_responses_params, mock_context)
 
         assert exc_info.value.status_code == 500
 
@@ -985,14 +1006,12 @@ class TestCreateResponseGenerator:
         mock_context.client = mock_client
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.query_request = QueryRequest(
             query="test"
         )  # pyright: ignore[reportCallIssue]
+        mock_context.moderation_result = ShieldModerationPassed()
 
-        mocker.patch(
-            "app.endpoints.streaming_query.run_shield_moderation",
-            new=mocker.AsyncMock(return_value=mocker.Mock(blocked=False)),
-        )
         mock_client.responses = mocker.Mock()
         mock_client.responses.create = mocker.AsyncMock(
             side_effect=RuntimeError("context_length exceeded")
@@ -1009,7 +1028,7 @@ class TestCreateResponseGenerator:
         )
 
         with pytest.raises(HTTPException) as exc_info:
-            await retrieve_response_generator(mock_responses_params, mock_context, [])
+            await retrieve_response_generator(mock_responses_params, mock_context)
 
         assert exc_info.value.status_code == 413
 
@@ -1034,21 +1053,19 @@ class TestCreateResponseGenerator:
         mock_context.client = mock_client
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.query_request = QueryRequest(
             query="test"
         )  # pyright: ignore[reportCallIssue]
+        mock_context.moderation_result = ShieldModerationPassed()
 
-        mocker.patch(
-            "app.endpoints.streaming_query.run_shield_moderation",
-            new=mocker.AsyncMock(return_value=mocker.Mock(blocked=False)),
-        )
         mock_client.responses = mocker.Mock()
         mock_client.responses.create = mocker.AsyncMock(
             side_effect=RuntimeError("Some other error")
         )
 
         with pytest.raises(RuntimeError):
-            await retrieve_response_generator(mock_responses_params, mock_context, [])
+            await retrieve_response_generator(mock_responses_params, mock_context)
 
 
 class TestGenerateResponse:
@@ -1077,6 +1094,7 @@ class TestGenerateResponse:
         mock_context.user_id = "user_123"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.query_request = QueryRequest(
             query="test"
         )  # pyright: ignore[reportCallIssue]
@@ -1134,6 +1152,7 @@ class TestGenerateResponse:
         mock_context.user_id = "user_123"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.query_request = QueryRequest(
             query="test", generate_topic_summary=True
         )  # pyright: ignore[reportCallIssue]
@@ -1186,6 +1205,7 @@ class TestGenerateResponse:
         mock_context.conversation_id = "conv_123"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.user_id = "user_123"
         mock_context.query_request = QueryRequest(
             query="test"
@@ -1228,6 +1248,7 @@ class TestGenerateResponse:
         mock_context.conversation_id = "conv_123"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.user_id = "user_123"
         mock_context.query_request = QueryRequest(
             query="test"
@@ -1273,6 +1294,7 @@ class TestGenerateResponse:
         mock_context.conversation_id = "conv_123"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.user_id = "user_123"
         mock_context.query_request = QueryRequest(
             query="test", media_type=MEDIA_TYPE_JSON
@@ -1320,6 +1342,7 @@ class TestGenerateResponse:
         mock_context.conversation_id = "conv_123"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
         mock_context.user_id = "user_123"
         mock_context.query_request = QueryRequest(
             query="test", media_type=MEDIA_TYPE_JSON
@@ -1608,6 +1631,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -1637,6 +1661,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -1667,6 +1692,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -1707,6 +1733,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -1748,6 +1775,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -1796,6 +1824,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -1846,6 +1875,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
         mock_turn_summary.llm_response = "Response"
@@ -1893,6 +1923,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -1938,6 +1969,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -1982,6 +2014,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -2024,6 +2057,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -2067,6 +2101,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -2108,6 +2143,7 @@ class TestResponseGenerator:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -2127,6 +2163,61 @@ class TestResponseGenerator:
 
         assert len(result) > 0
         assert any("error" in item for item in result)
+
+    @pytest.mark.asyncio
+    async def test_response_generator_merges_inline_and_tool_rag_chunks_and_documents(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that inline RAG and tool-based RAG chunks/docs are correctly merged."""
+        inline_chunk = RAGChunk(content="inline chunk content", source="byok")
+        inline_doc = ReferencedDocument(doc_title="Inline Doc")
+        inline_rag = RAGContext(
+            context_text="",
+            rag_chunks=[inline_chunk],
+            referenced_documents=[inline_doc],
+        )
+
+        tool_chunk = RAGChunk(content="tool chunk content", source="vs-1")
+        tool_ref_doc = ReferencedDocument(doc_title="Tool Doc")
+
+        mock_response_obj = mocker.Mock(spec=OpenAIResponseObject)
+        mock_response_obj.usage = mocker.Mock()
+        mock_response_obj.output = []
+
+        async def mock_turn_response() -> AsyncIterator[OpenAIResponseObjectStream]:
+            completed_chunk = mocker.Mock(spec=CompletedChunk)
+            completed_chunk.type = "response.completed"
+            completed_chunk.response = mock_response_obj
+            yield completed_chunk
+
+        mock_context = mocker.Mock(spec=ResponseGeneratorContext)
+        mock_context.query_request = QueryRequest(
+            query="test", media_type=MEDIA_TYPE_JSON
+        )  # pyright: ignore[reportCallIssue]
+        mock_context.model_id = "provider1/model1"
+        mock_context.vector_store_ids = []
+        mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = inline_rag
+
+        mock_turn_summary = TurnSummary()
+        mock_turn_summary.rag_chunks = [tool_chunk]
+        mock_turn_summary.referenced_documents = [tool_ref_doc]
+        mocker.patch(
+            "app.endpoints.streaming_query.parse_referenced_documents",
+            return_value=[tool_ref_doc],
+        )
+
+        async for _ in response_generator(
+            mock_turn_response(), mock_context, mock_turn_summary
+        ):
+            pass
+
+        assert len(mock_turn_summary.rag_chunks) == 2
+        assert mock_turn_summary.rag_chunks[0].content == "inline chunk content"
+        assert mock_turn_summary.rag_chunks[1].content == "tool chunk content"
+        assert len(mock_turn_summary.referenced_documents) == 2
+        assert mock_turn_summary.referenced_documents[0].doc_title == "Inline Doc"
+        assert mock_turn_summary.referenced_documents[1].doc_title == "Tool Doc"
 
 
 class TestStreamHttpErrorEvent:
@@ -2230,6 +2321,7 @@ class TestResponseGeneratorMCPCalls:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -2282,6 +2374,7 @@ class TestResponseGeneratorMCPCalls:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -2354,6 +2447,7 @@ class TestResponseGeneratorMCPCalls:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 
@@ -2369,8 +2463,7 @@ class TestResponseGeneratorMCPCalls:
             # Remove item from dict to simulate real behavior
             # arguments parameter is required by function signature but unused here
             _ = arguments
-            if output_index in mcp_call_items:
-                del mcp_call_items[output_index]
+            mcp_call_items.pop(output_index, None)
             return mock_tool_call
 
         mocker.patch(
@@ -2442,6 +2535,7 @@ class TestResponseGeneratorMCPCalls:
         mock_context.model_id = "provider1/model1"
         mock_context.vector_store_ids = []
         mock_context.rag_id_mapping = {}
+        mock_context.inline_rag_context = RAGContext()
 
         mock_turn_summary = TurnSummary()
 

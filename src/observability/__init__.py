@@ -11,4 +11,4 @@ default implementation, or create your own format module.
 from observability.formats import InferenceEventData, build_inference_event
 from observability.splunk import send_splunk_event
 
-__all__ = ["send_splunk_event", "InferenceEventData", "build_inference_event"]
+__all__ = ["InferenceEventData", "build_inference_event", "send_splunk_event"]

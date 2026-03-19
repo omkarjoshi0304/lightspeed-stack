@@ -3,9 +3,9 @@
 import asyncio
 import json
 import uuid
-from collections.abc import Mapping
-from datetime import datetime, timezone
-from typing import Annotated, Any, AsyncIterator, MutableMapping, Optional
+from collections.abc import Mapping, AsyncIterator, MutableMapping
+from datetime import datetime, UTC
+from typing import Annotated, Any, Optional
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.apps import A2AStarletteApplication
@@ -340,7 +340,7 @@ class A2AAgentExecutor(AgentExecutor):
             stream = await client.responses.create(**responses_params.model_dump())
         except APIConnectionError as e:
             error_message = (
-                f"Unable to connect to Llama Stack backend service: {str(e)}. "
+                f"Unable to connect to Llama Stack backend service: {e!s}. "
                 "The service may be temporarily unavailable. Please try again later."
             )
             logger.error(
@@ -381,7 +381,7 @@ class A2AAgentExecutor(AgentExecutor):
                 task_id=task_id,
                 status=TaskStatus(
                     state=TaskState.working,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                 ),
                 context_id=context_id,
                 final=False,
@@ -403,14 +403,14 @@ class A2AAgentExecutor(AgentExecutor):
         if aggregator.task_state == TaskState.working:
             await task_updater.update_status(
                 TaskState.completed,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 final=True,
             )
         else:
             await task_updater.update_status(
                 aggregator.task_state,
                 message=aggregator.task_status_message,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 final=True,
             )
 
@@ -459,7 +459,7 @@ class A2AAgentExecutor(AgentExecutor):
                                 context_id=context_id,
                                 task_id=task_id,
                             ),
-                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            timestamp=datetime.now(UTC).isoformat(),
                         ),
                         context_id=context_id,
                         final=False,
@@ -477,7 +477,7 @@ class A2AAgentExecutor(AgentExecutor):
                             context_id=context_id,
                             task_id=task_id,
                         ),
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                     ),
                     context_id=context_id,
                     final=False,
@@ -495,7 +495,7 @@ class A2AAgentExecutor(AgentExecutor):
                             context_id=context_id,
                             task_id=task_id,
                         ),
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                     ),
                     context_id=context_id,
                     final=False,
@@ -891,5 +891,5 @@ async def a2a_health_check() -> dict[str, str]:
         "service": "lightspeed-a2a",
         "version": __version__,
         "a2a_sdk_version": "0.3.4",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }

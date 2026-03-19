@@ -61,7 +61,7 @@ class MockOutputItem:  # pylint: disable=too-few-public-methods
         content: Any = None,
     ) -> None:
         # Use setattr to avoid conflict with built-in 'type'
-        setattr(self, "type", item_type)
+        self.type = item_type
         self.role = role
         self.content = content
 
@@ -98,8 +98,7 @@ def make_output_item(
     Returns:
         MockOutputItem: Mock object with type, role, and content attributes
     """
-    mock_item = MockOutputItem(item_type=item_type, role=role, content=content)
-    return mock_item
+    return MockOutputItem(item_type=item_type, role=role, content=content)
 
 
 def make_content_part(
@@ -127,9 +126,8 @@ def make_content_part(
         ("function_call", "assistant", "some text", ""),
         ("file_search_call", "assistant", "some text", ""),
         (None, "assistant", "some text", ""),
-        # User role messages are filtered out - return empty string
-        ("message", "user", "some text", ""),
-        # Valid assistant message with string content
+        # Message type extracts content regardless of role (input or output)
+        ("message", "user", "some text", "some text"),
         ("message", "assistant", "Hello, world!", "Hello, world!"),
         ("message", "assistant", "", ""),
     ],
@@ -137,7 +135,7 @@ def make_content_part(
         "function_call_type_returns_empty",
         "file_search_call_type_returns_empty",
         "none_type_returns_empty",
-        "user_role_returns_empty",
+        "user_message_extracts_content",
         "valid_string_content",
         "empty_string_content",
     ],
@@ -147,11 +145,7 @@ def test_extract_text_basic_cases(
 ) -> None:
     """Test basic extraction cases for different types, roles, and simple content.
 
-    Args:
-        item_type: Type of the output item
-        role: Role of the message
-        content: Content of the message
-        expected: Expected extracted text
+    Extraction works for both input and output items; role is not filtered.
     """
     output_item = make_output_item(item_type=item_type, role=role, content=content)
     result = extract_text_from_response_item(output_item)  # type: ignore[arg-type]
@@ -307,8 +301,8 @@ class TestExtractTextFromResponseItems:
         result = extract_text_from_response_items([item1, item2])  # type: ignore[arg-type]
         assert result == "Valid message"
 
-    def test_extract_text_from_response_items_filters_user_messages(self) -> None:
-        """Test extract_text_from_response_items filters out user role messages."""
+    def test_extract_text_from_response_items_includes_all_roles(self) -> None:
+        """Test extract_text_from_response_items extracts from all message roles."""
         item1 = make_output_item(
             item_type="message", role="assistant", content="Assistant message"
         )
@@ -316,8 +310,8 @@ class TestExtractTextFromResponseItems:
             item_type="message", role="user", content="User message"
         )
         result = extract_text_from_response_items([item1, item2])  # type: ignore[arg-type]
-        # User messages are filtered out - only assistant message is included
-        assert result == "Assistant message"
+        # All message items are included (generalizes for input and output)
+        assert result == "Assistant message User message"
 
     def test_extract_text_from_response_items_with_list_content(self) -> None:
         """Test extract_text_from_response_items with list-based content."""
@@ -583,48 +577,6 @@ class TestGetMCPTools:
         assert len(tools) == 1
         assert tools[0].server_label == "public-server"
         assert tools[0].headers is None
-
-    @pytest.mark.asyncio
-    async def test_get_mcp_tools_oauth_no_headers_raises_401_with_www_authenticate(
-        self, mocker: MockerFixture
-    ) -> None:
-        """Test get_mcp_tools raises 401 with WWW-Authenticate when OAuth required and no headers."""
-        servers = [
-            ModelContextProtocolServer(
-                name="oauth-server",
-                url="http://localhost:3000",
-                authorization_headers={"Authorization": "oauth"},
-                provider_id="x",
-            ),
-        ]
-        mock_config = mocker.Mock()
-        mock_config.mcp_servers = servers
-        mocker.patch("utils.responses.configuration", mock_config)
-
-        mock_resp = mocker.Mock()
-        mock_resp.headers = {"WWW-Authenticate": 'Bearer error="invalid_token"'}
-        mock_session = mocker.MagicMock()
-        mock_get_cm = mocker.AsyncMock()
-        mock_get_cm.__aenter__.return_value = mock_resp
-        mock_get_cm.__aexit__.return_value = None
-        mock_session.get.return_value = mock_get_cm
-        mock_session_cm = mocker.AsyncMock()
-        mock_session_cm.__aenter__.return_value = mock_session
-        mock_session_cm.__aexit__.return_value = None
-        mocker.patch(
-            "utils.mcp_oauth_probe.aiohttp.ClientSession",
-            return_value=mock_session_cm,
-        )
-
-        with pytest.raises(HTTPException) as exc_info:
-            await get_mcp_tools(token=None, mcp_headers=None)
-
-        assert exc_info.value.status_code == 401
-        assert exc_info.value.headers is not None
-        assert (
-            exc_info.value.headers.get("WWW-Authenticate")
-            == 'Bearer error="invalid_token"'
-        )
 
     @pytest.mark.asyncio
     async def test_get_mcp_tools_with_propagated_headers(
@@ -1074,6 +1026,8 @@ class TestPrepareToolsTranslatesVectorStoreIds:
         mock_byok_rag.vector_db_id = "vs-001"
         mock_config = mocker.Mock()
         mock_config.configuration.byok_rag = [mock_byok_rag]
+        mock_config.configuration.rag.tool = []
+        mock_config.configuration.rag.inline = []
         mocker.patch("utils.responses.configuration", mock_config)
 
         result = await prepare_tools(mock_client, ["ocp_docs"], False, "token")
@@ -1093,6 +1047,8 @@ class TestPrepareToolsTranslatesVectorStoreIds:
         # Configure empty BYOK RAG
         mock_config = mocker.Mock()
         mock_config.configuration.byok_rag = []
+        mock_config.configuration.rag.tool = []
+        mock_config.configuration.rag.inline = []
         mocker.patch("utils.responses.configuration", mock_config)
 
         result = await prepare_tools(mock_client, ["raw-internal-id"], False, "token")
@@ -1121,13 +1077,128 @@ class TestPrepareToolsTranslatesVectorStoreIds:
         mock_byok_rag.vector_db_id = "vs-translated"
         mock_config = mocker.Mock()
         mock_config.configuration.byok_rag = [mock_byok_rag]
-        mock_config.configuration.rag.tool = None
+        mock_config.configuration.rag.tool = []
+        mock_config.configuration.rag.inline = []
         mocker.patch("utils.responses.configuration", mock_config)
 
         result = await prepare_tools(mock_client, None, False, "token")
         assert result is not None
         # The IDs from llama-stack should be used as-is (no BYOK translation on None path)
         assert result[0].vector_store_ids == ["vs-internal"]
+
+
+class TestPrepareToolsVectorStoreResolution:
+    """Tests for vector store ID resolution priority in prepare_tools."""
+
+    @pytest.mark.asyncio
+    async def test_uses_rag_tool_config_when_no_per_request_ids(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that rag.tool config IDs are used when no per-request IDs are provided."""
+        mock_client = mocker.AsyncMock()
+        mocker.patch("utils.responses.get_mcp_tools", return_value=None)
+
+        mock_config = mocker.Mock()
+        mock_config.configuration.byok_rag = []
+        mock_config.configuration.rag.tool = ["rag-tool-id-1", "rag-tool-id-2"]
+        mock_config.configuration.rag.inline = []
+        mocker.patch("utils.responses.configuration", mock_config)
+
+        result = await prepare_tools(mock_client, None, False, "token")
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].type == "file_search"
+        assert result[0].vector_store_ids == ["rag-tool-id-1", "rag-tool-id-2"]
+        mock_client.vector_stores.list.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rag_tool_config_ids_are_translated(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that rag.tool config IDs are translated from rag_ids to vector_db_ids."""
+        mock_client = mocker.AsyncMock()
+        mocker.patch("utils.responses.get_mcp_tools", return_value=None)
+
+        mock_byok_rag = mocker.Mock()
+        mock_byok_rag.rag_id = "ocp_docs"
+        mock_byok_rag.vector_db_id = "vs-001"
+        mock_config = mocker.Mock()
+        mock_config.configuration.byok_rag = [mock_byok_rag]
+        mock_config.configuration.rag.tool = ["ocp_docs"]
+        mock_config.configuration.rag.inline = []
+        mocker.patch("utils.responses.configuration", mock_config)
+
+        result = await prepare_tools(mock_client, None, False, "token")
+
+        assert result is not None
+        assert result[0].vector_store_ids == ["vs-001"]
+        mock_client.vector_stores.list.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_inline_rag_disables_tool_rag(self, mocker: MockerFixture) -> None:
+        """Test that configuring rag.inline without rag.tool disables tool RAG."""
+        mock_client = mocker.AsyncMock()
+        mocker.patch("utils.responses.get_mcp_tools", return_value=None)
+
+        mock_config = mocker.Mock()
+        mock_config.configuration.byok_rag = []
+        mock_config.configuration.rag.tool = []
+        mock_config.configuration.rag.inline = [
+            "inline-store-id"
+        ]  # inline is configured
+        mocker.patch("utils.responses.configuration", mock_config)
+
+        result = await prepare_tools(mock_client, None, False, "token")
+
+        # Tool RAG should be disabled — no RAG tool in result, no llama-stack fetch
+        assert result is None
+        mock_client.vector_stores.list.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_per_request_ids_override_rag_tool_config(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that per-request vector_store_ids take priority over rag.tool config."""
+        mock_client = mocker.AsyncMock()
+        mocker.patch("utils.responses.get_mcp_tools", return_value=None)
+
+        mock_config = mocker.Mock()
+        mock_config.configuration.byok_rag = []
+        mock_config.configuration.rag.tool = ["config-id-1"]
+        mock_config.configuration.rag.inline = []
+        mocker.patch("utils.responses.configuration", mock_config)
+
+        result = await prepare_tools(mock_client, ["request-id-1"], False, "token")
+
+        assert result is not None
+        assert result[0].vector_store_ids == ["request-id-1"]
+        mock_client.vector_stores.list.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_all_registered_dbs_used_when_neither_tool_nor_inline_configured(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test fallback to all registered vector DBs when neither rag.tool nor rag.inline are set."""
+        mock_client = mocker.AsyncMock()
+        mock_vs = mocker.Mock()
+        mock_vs.id = "vs-registered"
+        mock_list = mocker.Mock()
+        mock_list.data = [mock_vs]
+        mock_client.vector_stores.list = mocker.AsyncMock(return_value=mock_list)
+        mocker.patch("utils.responses.get_mcp_tools", return_value=None)
+
+        mock_config = mocker.Mock()
+        mock_config.configuration.byok_rag = []
+        mock_config.configuration.rag.tool = []
+        mock_config.configuration.rag.inline = []
+        mocker.patch("utils.responses.configuration", mock_config)
+
+        result = await prepare_tools(mock_client, None, False, "token")
+
+        assert result is not None
+        assert result[0].vector_store_ids == ["vs-registered"]
+        mock_client.vector_stores.list.assert_called_once()
 
 
 class TestPrepareResponsesParams:
@@ -2085,6 +2156,69 @@ class TestResolveSourceForResult:
             {"vs-001": "ocp-docs"},
         )
         assert source == "vs-unknown"
+
+    def test_multiple_stores_source_attribute_fallback(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test resolution falls back to source attribute when no vector_store_id."""
+        mock_result = mocker.Mock()
+        mock_result.filename = "file-abc123"
+        mock_result.attributes = {"source": "ocp-documentation"}
+
+        source = _resolve_source_for_result(
+            mock_result,
+            ["vs-001", "vs-002"],
+            {"vs-001": "ocp-4.18-docs"},
+        )
+        assert source == "ocp-documentation"
+
+    def test_multiple_stores_source_attribute_ignores_mapping(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test source attribute is returned directly without rag_id_mapping lookup."""
+        mock_result = mocker.Mock()
+        mock_result.filename = "file-abc123"
+        mock_result.attributes = {"source": "custom-index"}
+
+        source = _resolve_source_for_result(
+            mock_result,
+            ["vs-001", "vs-002"],
+            {"custom-index": "should-not-be-used"},
+        )
+        assert source == "custom-index"
+
+    def test_multiple_stores_source_preferred_over_vector_store_id(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test source attribute takes precedence over vector_store_id."""
+        mock_result = mocker.Mock()
+        mock_result.filename = "file-abc123"
+        mock_result.attributes = {
+            "vector_store_id": "vs-002",
+            "source": "ocp-documentation",
+        }
+
+        source = _resolve_source_for_result(
+            mock_result,
+            ["vs-001", "vs-002"],
+            {"vs-002": "rhel-9-docs"},
+        )
+        assert source == "ocp-documentation"
+
+    def test_multiple_stores_no_vector_store_id_no_source(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test resolution returns None when neither vector_store_id nor source present."""
+        mock_result = mocker.Mock()
+        mock_result.filename = "file-abc123"
+        mock_result.attributes = {"title": "some doc"}
+
+        source = _resolve_source_for_result(
+            mock_result,
+            ["vs-001", "vs-002"],
+            {"vs-001": "ocp-docs"},
+        )
+        assert source is None
 
 
 class TestBuildChunkAttributes:

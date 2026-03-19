@@ -6,7 +6,8 @@ import re
 from enum import Enum
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Optional, Pattern
+from re import Pattern
+from typing import Any, Literal, Optional, Self
 
 import jsonpath_ng
 import yaml
@@ -25,7 +26,6 @@ from pydantic import (
     model_validator,
 )
 from pydantic.dataclasses import dataclass
-from typing_extensions import Literal, Self
 
 import constants
 from log import get_logger
@@ -1019,6 +1019,11 @@ class Action(str, Enum):
     # RHEL Lightspeed rlsapi v1 compatibility - stateless inference (no history/RAG)
     RLSAPI_V1_INFER = "rlsapi_v1_infer"
 
+    # Dynamic MCP server management
+    REGISTER_MCP_SERVER = "register_mcp_server"
+    LIST_MCP_SERVERS = "list_mcp_servers"
+    DELETE_MCP_SERVER = "delete_mcp_server"
+
     # A2A (Agent-to-Agent) protocol actions
     A2A_AGENT_CARD = "a2a_agent_card"
     A2A_TASK_EXECUTION = "a2a_task_execution"
@@ -1124,6 +1129,13 @@ class RHIdentityConfiguration(ConfigurationBase):
         None,
         title="Required entitlements",
         description="List of all required entitlements.",
+    )
+
+    max_header_size: PositiveInt = Field(
+        default=constants.DEFAULT_RH_IDENTITY_MAX_HEADER_SIZE,
+        title="Maximum header size",
+        description="Maximum allowed size in bytes for the base64-encoded x-rh-identity header. "
+        "Headers exceeding this size are rejected before decoding.",
     )
 
 
@@ -1310,6 +1322,21 @@ class Customization(ConfigurationBase):
     agent_card_path: Optional[FilePath] = None
     agent_card_config: Optional[dict[str, Any]] = None
     custom_profile: Optional[CustomProfile] = Field(default=None, init=False)
+
+    # Debugging: Allow /v1/infer to return extended metadata
+    # WARNING: This should NOT be enabled in production environments.
+    # Setting this to True allows clients to request extended response data
+    # (tool_calls, rag_chunks, token_usage, etc.) from the /v1/infer endpoint
+    # by including "include_metadata": true in the request body.
+    #
+    # If this feature were wanted in production, consider RBAC-based access control instead:
+    # 1. Add Action.RLSAPI_V1_INFER_VERBOSE to models/config.py Action enum
+    # 2. Check authorization in infer_endpoint:
+    #    if infer_request.include_metadata:
+    #        if Action.RLSAPI_V1_INFER_VERBOSE not in request.state.authorized_actions:
+    #            raise HTTPException(status_code=403, detail="Verbose infer not authorized")
+    # 3. Add the action to authorization rules for specific users/roles
+    allow_verbose_infer: bool = False
 
     @model_validator(mode="after")
     def check_customization_model(self) -> Self:
@@ -1704,8 +1731,10 @@ class RagConfiguration(ConfigurationBase):
 
     Backward compatibility:
         - ``inline`` defaults to ``[]`` (no inline RAG).
-        - ``tool`` defaults to ``None`` which means all registered vector stores
-          are used (identical to the previous ``tool.byok.enabled = True`` default).
+        - ``tool`` defaults to ``[]`` (no tool RAG).
+
+    If no RAG strategy is defined (inline and tool are empty),
+    the RAG tool will register all stores available to llama-stack.
     """
 
     inline: list[str] = Field(
@@ -1715,8 +1744,8 @@ class RagConfiguration(ConfigurationBase):
         f"Use '{constants.OKP_RAG_ID}' to enable OKP inline RAG. Empty by default (no inline RAG).",
     )
 
-    tool: Optional[list[str]] = Field(
-        default=None,
+    tool: list[str] = Field(
+        default_factory=list,
         title="Tool RAG IDs",
         description="RAG IDs made available to the LLM as a file_search tool. "
         f"Use '{constants.OKP_RAG_ID}' to include the OKP vector store. "
@@ -1738,13 +1767,11 @@ class OkpConfiguration(ConfigurationBase):
         "When False, use reference_url for chunk source URLs.",
     )
 
-    chunk_filter_query: str = Field(
-        default="is_chunk:true",
+    chunk_filter_query: Optional[str] = Field(
+        default=None,
         title="OKP chunk filter query",
-        description="OKP filter query applied to every OKP search request. "
-        "Defaults to 'is_chunk:true' to restrict results to chunk documents. "
-        "To add extra constraints, extend the expression using boolean syntax, "
-        "e.g. 'is_chunk:true AND product:*openshift*'.",
+        description="Additional OKP filter query applied to every OKP search request. "
+        "Use Solr boolean syntax, e.g. 'product:ansible AND product:*openshift*'.",
     )
 
 

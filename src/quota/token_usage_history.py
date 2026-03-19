@@ -6,25 +6,23 @@ provider, model). This triple is also used as a primary key to this table.
 """
 
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 import psycopg2
 
 from log import get_logger
-
+from models.config import (
+    PostgreSQLDatabaseConfiguration,
+    QuotaHandlersConfiguration,
+    SQLiteDatabaseConfiguration,
+)
 from quota.connect_pg import connect_pg
 from quota.connect_sqlite import connect_sqlite
 from quota.sql import (
-    CREATE_TOKEN_USAGE_TABLE,
     CONSUME_TOKENS_FOR_USER_PG,
     CONSUME_TOKENS_FOR_USER_SQLITE,
-)
-
-from models.config import (
-    QuotaHandlersConfiguration,
-    SQLiteDatabaseConfiguration,
-    PostgreSQLDatabaseConfiguration,
+    CREATE_TOKEN_USAGE_TABLE,
 )
 from utils.connection_decorator import connection
 
@@ -135,7 +133,7 @@ class TokenUsageHistory:
             return
 
         # timestamp to be used
-        updated_at = datetime.now()
+        updated_at = datetime.now(tz=UTC)
 
         # it is not possible to use context manager there, because SQLite does
         # not support it

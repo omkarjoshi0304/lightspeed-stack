@@ -4,7 +4,8 @@
 # pylint: disable=too-many-arguments  # Integration tests need many fixtures
 # pylint: disable=too-many-positional-arguments  # Integration tests need many fixtures
 
-from typing import Any, Generator
+from typing import Any
+from collections.abc import Generator
 
 import pytest
 from fastapi import HTTPException, Request, status

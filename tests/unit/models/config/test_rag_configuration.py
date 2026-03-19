@@ -17,13 +17,13 @@ class TestRagConfiguration:
         """Test that RagConfiguration has correct default values."""
         config = RagConfiguration()
         assert config.inline == []
-        assert config.tool is None
+        assert config.tool == []
 
     def test_inline_with_byok_ids(self) -> None:
         """Test inline list with BYOK rag IDs."""
         config = RagConfiguration(inline=["store-1", "store-2"])
         assert config.inline == ["store-1", "store-2"]
-        assert config.tool is None
+        assert config.tool == []
 
     def test_inline_with_okp_rag(self) -> None:
         """Test inline list including the special OKP ID."""
@@ -45,10 +45,10 @@ class TestRagConfiguration:
         config = RagConfiguration(tool=[])
         assert config.tool == []
 
-    def test_tool_none_means_all_stores(self) -> None:
-        """Test that tool=None (default) means all registered stores are used."""
+    def test_tool_default_is_empty_list(self) -> None:
+        """Test that tool defaults to an empty list."""
         config = RagConfiguration()
-        assert config.tool is None
+        assert config.tool == []
 
     def test_no_unknown_fields_allowed(self) -> None:
         """Test that RagConfiguration rejects unknown fields."""
@@ -73,7 +73,7 @@ class TestOkpConfiguration:
         """Test that OkpConfiguration has correct default values."""
         config = OkpConfiguration()
         assert config.offline is True
-        assert config.chunk_filter_query == "is_chunk:true"
+        assert config.chunk_filter_query is None
 
     def test_offline_false(self) -> None:
         """Test offline can be set to False (online mode)."""
@@ -82,10 +82,8 @@ class TestOkpConfiguration:
 
     def test_custom_chunk_filter_query(self) -> None:
         """Test that chunk_filter_query can be customised."""
-        config = OkpConfiguration(
-            chunk_filter_query="is_chunk:true AND product:*openshift*"
-        )
-        assert config.chunk_filter_query == "is_chunk:true AND product:*openshift*"
+        config = OkpConfiguration(chunk_filter_query="product:*openshift*")
+        assert config.chunk_filter_query == "product:*openshift*"
 
     def test_no_unknown_fields_allowed(self) -> None:
         """Test that OkpConfiguration rejects unknown fields."""

@@ -1,6 +1,7 @@
 """Integration tests for the /root endpoint."""
 
-from typing import Generator, Any
+from typing import Any
+from collections.abc import Generator
 import pytest
 from pytest_mock import MockerFixture
 

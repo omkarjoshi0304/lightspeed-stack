@@ -25,13 +25,13 @@ def generate_docfile(directory):
             f"# List of source files stored in `{directory}` directory",
             file=indexfile,
         )
-        print("", file=indexfile)
+        print(file=indexfile)
         files = sorted(os.listdir())
 
         for file in files:
             if file.endswith(".py"):
                 print(f"## [{file}]({file})", file=indexfile)
-                with open(file, "r", encoding="utf-8") as fin:
+                with open(file, encoding="utf-8") as fin:
                     source = fin.read()
                 try:
                     mod = ast.parse(source)

@@ -2,39 +2,38 @@
 
 from typing import Any, Optional
 
+import yaml
+
 # We want to support environment variable replacement in the configuration
 # similarly to how it is done in llama-stack, so we use their function directly
 from llama_stack.core.stack import replace_env_vars
 
-import yaml
 import constants
+from cache.cache import Cache
+from cache.cache_factory import CacheFactory
+from log import get_logger
 from models.config import (
     A2AStateConfiguration,
+    AuthenticationConfiguration,
     AuthorizationConfiguration,
     AzureEntraIdConfiguration,
     Configuration,
-    Customization,
-    LlamaStackConfiguration,
-    OkpConfiguration,
-    RagConfiguration,
-    UserDataCollection,
-    ServiceConfiguration,
-    ModelContextProtocolServer,
-    AuthenticationConfiguration,
-    InferenceConfiguration,
-    DatabaseConfiguration,
     ConversationHistoryConfiguration,
+    Customization,
+    DatabaseConfiguration,
+    InferenceConfiguration,
+    LlamaStackConfiguration,
+    ModelContextProtocolServer,
+    OkpConfiguration,
     QuotaHandlersConfiguration,
+    RagConfiguration,
+    ServiceConfiguration,
     SplunkConfiguration,
+    UserDataCollection,
 )
-
-from cache.cache import Cache
-from cache.cache_factory import CacheFactory
-
 from quota.quota_limiter import QuotaLimiter
-from quota.token_usage_history import TokenUsageHistory
 from quota.quota_limiter_factory import QuotaLimiterFactory
-from log import get_logger
+from quota.token_usage_history import TokenUsageHistory
 
 logger = get_logger(__name__)
 
@@ -65,6 +64,7 @@ class AppConfig:  # pylint: disable=too-many-public-methods
         self._conversation_cache: Optional[Cache] = None
         self._quota_limiters: list[QuotaLimiter] = []
         self._token_usage_history: Optional[TokenUsageHistory] = None
+        self._dynamic_mcp_server_names: set[str] = set()
 
     def load_configuration(self, filename: str) -> None:
         """Load configuration from YAML file.
@@ -165,6 +165,67 @@ class AppConfig:  # pylint: disable=too-many-public-methods
         if self._configuration is None:
             raise LogicError("logic error: configuration is not loaded")
         return self._configuration.mcp_servers
+
+    @property
+    def dynamic_mcp_server_names(self) -> set[str]:
+        """Return the set of dynamically registered MCP server names.
+
+        Returns:
+            set[str]: Names of MCP servers added via the API (not from config file).
+        """
+        return self._dynamic_mcp_server_names
+
+    def add_mcp_server(self, mcp_server: ModelContextProtocolServer) -> None:
+        """Add an MCP server to the runtime configuration.
+
+        Parameters:
+            mcp_server: The MCP server configuration to add.
+
+        Raises:
+            LogicError: If the configuration has not been loaded.
+            ValueError: If an MCP server with the same name already exists.
+        """
+        if self._configuration is None:
+            raise LogicError("logic error: configuration is not loaded")
+        for existing in self._configuration.mcp_servers:
+            if existing.name == mcp_server.name:
+                raise ValueError(
+                    f"MCP server with name '{mcp_server.name}' already exists"
+                )
+        self._configuration.mcp_servers.append(mcp_server)
+        self._dynamic_mcp_server_names.add(mcp_server.name)
+
+    def remove_mcp_server(self, name: str) -> None:
+        """Remove a dynamically registered MCP server from the runtime configuration.
+
+        Parameters:
+            name: The name of the MCP server to remove.
+
+        Raises:
+            LogicError: If the configuration has not been loaded.
+            ValueError: If the server was not found or was statically configured.
+        """
+        if self._configuration is None:
+            raise LogicError("logic error: configuration is not loaded")
+        if name not in self._dynamic_mcp_server_names:
+            raise ValueError(
+                f"MCP server '{name}' was not dynamically registered or does not exist"
+            )
+        self._configuration.mcp_servers = [
+            s for s in self._configuration.mcp_servers if s.name != name
+        ]
+        self._dynamic_mcp_server_names.discard(name)
+
+    def is_dynamic_mcp_server(self, name: str) -> bool:
+        """Check if an MCP server was dynamically registered.
+
+        Parameters:
+            name: The name of the MCP server.
+
+        Returns:
+            bool: True if the server was registered via the API.
+        """
+        return name in self._dynamic_mcp_server_names
 
     @property
     def authentication_configuration(self) -> AuthenticationConfiguration:
@@ -382,18 +443,28 @@ class AppConfig:  # pylint: disable=too-many-public-methods
 
     @property
     def rag_id_mapping(self) -> dict[str, str]:
-        """Return mapping from vector_db_id to rag_id from BYOK RAG config.
+        """Return mapping from vector_db_id to rag_id from BYOK and OKP RAG config.
 
         Returns:
-            dict[str, str]: Mapping where keys are llama-stack vector_db_ids
-            and values are user-facing rag_ids from configuration.
+            dict[str, str]: Mapping where keys are llama-stack vector_store_ids
+            (old vector_db_id) and values are user-facing rag_ids from configuration.
 
         Raises:
             LogicError: If the configuration has not been loaded.
         """
         if self._configuration is None:
             raise LogicError("logic error: configuration is not loaded")
-        return {brag.vector_db_id: brag.rag_id for brag in self._configuration.byok_rag}
+        byok_mapping = {
+            brag.vector_db_id: brag.rag_id for brag in self._configuration.byok_rag
+        }
+
+        rag = self._configuration.rag
+        okp_id = constants.OKP_RAG_ID
+        okp_enabled = okp_id in (rag.inline or []) or okp_id in (rag.tool or [])
+        okp_mapping = (
+            {constants.SOLR_DEFAULT_VECTOR_STORE_ID: okp_id} if okp_enabled else {}
+        )
+        return {**byok_mapping, **okp_mapping}
 
     @property
     def score_multiplier_mapping(self) -> dict[str, float]:

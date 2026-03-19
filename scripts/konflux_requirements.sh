@@ -4,6 +4,8 @@
 # Packages from pypi.org go to requirements.source.txt
 # Packages from console.redhat.com go to requirements.wheel.txt
 
+set -x
+
 RAW_REQ_FILE="requirements.no_hashes.txt"
 SOURCE_FILE="requirements.source.txt"
 WHEEL_FILE="requirements.wheel.txt"

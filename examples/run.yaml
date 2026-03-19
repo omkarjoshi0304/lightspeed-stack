@@ -163,6 +163,12 @@ registered_resources:
   - toolgroup_id: builtin::rag # Register the RAG tool
     provider_id: rag-runtime
 vector_stores:
+  annotation_prompt_params: # Override the default Llama Stack annotation that adds <| file-xyz |> to responses
+    enable_annotations: true
+    annotation_instruction_template: >
+      When appropriate, cite sources at the end of sentences using doc_url and doc_title format. 
+      Citing sources is not always required because citations are handled externally. 
+      Never include any citation that is in the form '<| file-id |>'.
   default_provider_id: faiss
   default_embedding_model: # Define the default embedding model for RAG
     provider_id: sentence-transformers

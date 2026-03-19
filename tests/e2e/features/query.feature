@@ -175,7 +175,7 @@ Scenario: Check if LLM responds for query request with error for missing query
     {"query": "Say hello", "model": "{MODEL}", "provider":"unknown"}
     """
      Then The status code of the response is 404
-      And The body of the response contains Model with ID gpt-4o-mini does not exist
+      And The body of the response contains Model with ID {MODEL} does not exist
 
   @skip-in-library-mode
   Scenario: Check if LLM responds for query request with error for inability to connect to llama-stack

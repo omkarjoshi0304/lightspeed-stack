@@ -2,8 +2,11 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Any, Optional, Union, cast
+from typing import Any, Optional, cast
+from collections.abc import Sequence
 
+from fastapi import HTTPException
+from llama_stack_api import OpenAIResponseMessage, OpenAIResponseOutput
 from llama_stack_api.openai_responses import (
     OpenAIResponseOutputMessageFileSearchToolCall as FileSearchCall,
     OpenAIResponseOutputMessageFunctionToolCall as FunctionCall,
@@ -11,6 +14,8 @@ from llama_stack_api.openai_responses import (
     OpenAIResponseOutputMessageMCPListTools as MCPListTools,
     OpenAIResponseOutputMessageWebSearchToolCall as WebSearchCall,
 )
+from llama_stack_client import APIConnectionError, APIStatusError, AsyncLlamaStackClient
+from llama_stack_client.types.conversations.item_create_params import Item
 from llama_stack_client.types.conversations.item_list_response import (
     ItemListResponse,
     OpenAIResponseInputFunctionToolCallOutput as FunctionToolCallOutput,
@@ -21,12 +26,17 @@ from llama_stack_client.types.conversations.item_list_response import (
 
 from constants import DEFAULT_RAG_TOOL
 from models.database.conversations import UserTurn
-from models.responses import ConversationTurn, Message
+from models.responses import (
+    ConversationTurn,
+    InternalServerErrorResponse,
+    Message,
+    ServiceUnavailableResponse,
+)
 from utils.responses import parse_arguments_string
-from utils.types import ToolCallSummary, ToolResultSummary
+from utils.types import ResponseInput, ToolCallSummary, ToolResultSummary
 
 
-def _extract_text_from_content(content: Union[str, list[Any]]) -> str:
+def _extract_text_from_content(content: str | list[Any]) -> str:
     """Extract text content from message content.
 
     Args:
@@ -71,7 +81,7 @@ def _parse_message_item(item: MessageOutput) -> Message:
     """
     content_text = _extract_text_from_content(item.content)
     message_type = item.role
-    return Message(content=content_text, type=message_type)
+    return Message(content=content_text, type=message_type, referenced_documents=None)
 
 
 def _build_tool_call_summary_from_item(  # pylint: disable=too-many-return-statements
@@ -423,3 +433,82 @@ def build_conversation_turns_from_items(
         )
 
     return chat_history
+
+
+async def append_turn_items_to_conversation(
+    client: AsyncLlamaStackClient,
+    conversation_id: str,
+    user_input: ResponseInput,
+    llm_output: Sequence[OpenAIResponseOutput],
+) -> None:
+    """
+    Append a turn (user input + LLM output) to a conversation in LLS database.
+
+    Args:
+        client: The Llama Stack client.
+        conversation_id: The Llama Stack conversation ID.
+        user_input: User input text or list of ResponseItem.
+        llm_output: Output from the LLM: a list of OpenAIResponseOutput.
+    """
+    if isinstance(user_input, str):
+        user_message = OpenAIResponseMessage(
+            role="user",
+            content=user_input,
+        )
+        user_items = [user_message.model_dump()]
+    else:
+        user_items = [item.model_dump() for item in user_input]
+
+    output_items = [item.model_dump() for item in llm_output]
+
+    items = user_items + output_items
+    try:
+        await client.conversations.items.create(
+            conversation_id,
+            items=cast(list[Item], items),
+        )
+    except APIConnectionError as e:
+        error_response = ServiceUnavailableResponse(
+            backend_name="Llama Stack",
+            cause=str(e),
+        )
+        raise HTTPException(**error_response.model_dump()) from e
+    except APIStatusError as e:
+        error_response = InternalServerErrorResponse.generic()
+        raise HTTPException(**error_response.model_dump()) from e
+
+
+async def get_all_conversation_items(
+    client: AsyncLlamaStackClient,
+    conversation_id_llama_stack: str,
+) -> list[ItemListResponse]:
+    """Fetch all items for a conversation (Conversations API), paginating as needed.
+
+    Args:
+        client: Llama Stack client.
+        conversation_id_llama_stack: Conversation ID in Llama Stack format.
+
+    Returns:
+        List of all items in the conversation, oldest first.
+    """
+    try:
+        paginator = client.conversations.items.list(
+            conversation_id=conversation_id_llama_stack,
+            order="asc",
+        )
+        first_page = await paginator
+        items: list[ItemListResponse] = list(first_page.data or [])
+        page = first_page
+        while page.has_next_page():
+            page = await page.get_next_page()
+            items.extend(page.data or [])
+        return items
+    except APIConnectionError as e:
+        error_response = ServiceUnavailableResponse(
+            backend_name="Llama Stack",
+            cause=str(e),
+        )
+        raise HTTPException(**error_response.model_dump()) from e
+    except APIStatusError as e:
+        error_response = InternalServerErrorResponse.generic()
+        raise HTTPException(**error_response.model_dump()) from e

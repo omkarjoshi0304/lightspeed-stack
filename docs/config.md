@@ -130,12 +130,12 @@ byok_rag:
 | Field | Type | Description |
 |-------|------|-------------|
 | rag_id | string | Unique RAG ID |
-| rag_type | string | Type of RAG database (e.g. `inline::faiss`). |
+| rag_type | string | Type of RAG database. |
 | embedding_model | string | Embedding model identification |
 | embedding_dimension | integer | Dimensionality of embedding vectors. |
 | vector_db_id | string | Vector database identification. |
 | db_path | string | Path to RAG database. |
-| score_multiplier | number | Multiplier applied to relevance scores from this vector store when querying multiple sources. Values > 1 boost results; values < 1 reduce them. Default: 1.0. |
+| score_multiplier | number | Multiplier applied to relevance scores from this vector store. Used to weight results when querying multiple knowledge sources. Values > 1 boost this store's results; values < 1 reduce them. |
 
 
 ## CORSConfiguration
@@ -187,7 +187,8 @@ Global service configuration.
 | azure_entra_id |  |  |
 | splunk |  | Splunk HEC configuration for sending telemetry events. |
 | deployment_environment | string | Deployment environment name (e.g., 'development', 'staging', 'production'). Used in telemetry events. |
-| rag |  | RAG strategy configuration (OKP and BYOK). Controls pre-query (Inline RAG) and tool-based (Tool RAG) retrieval. |
+| rag |  | Configuration for all RAG strategies (inline and tool-based). |
+| okp |  | OKP provider settings. Only used when 'okp' is listed in rag.inline or rag.tool. |
 
 
 ## ConversationHistoryConfiguration
@@ -395,6 +396,21 @@ Useful resources:
 | timeout | integer | Timeout in seconds for requests to the MCP server. If not specified, the default timeout from Llama Stack will be used. Note: This field is reserved for future use when Llama Stack adds timeout support. |
 
 
+## OkpConfiguration
+
+
+OKP (Offline Knowledge Portal) provider configuration.
+
+Controls provider-specific behaviour for the OKP vector store.
+Only relevant when ``"okp"`` is listed in ``rag.inline`` or ``rag.tool``.
+
+
+| Field | Type | Description |
+|-------|------|-------------|
+| offline | boolean | When True, use parent_id for OKP chunk source URLs. When False, use reference_url for chunk source URLs. |
+| chunk_filter_query | string | Additional OKP filter query applied to every OKP search request. Use Solr boolean syntax, e.g. 'product:\*ansible\* AND product:\*openshift\*'. |
+
+
 ## PostgreSQLDatabaseConfiguration
 
 
@@ -501,6 +517,30 @@ Red Hat Identity authentication configuration.
 | required_entitlements | array | List of all required entitlements. |
 
 
+## RagConfiguration
+
+
+RAG strategy configuration.
+
+Controls which RAG sources are used for inline and tool-based retrieval.
+
+Each strategy lists RAG IDs to include. The special ID ``"okp"`` defined in constants,
+activates the OKP provider; all other IDs refer to entries in ``byok_rag``.
+
+Backward compatibility:
+    - ``inline`` defaults to ``[]`` (no inline RAG).
+    - ``tool`` defaults to ``[]`` (no tool RAG).
+
+If no RAG strategy is defined (inline and tool are empty),
+the RAG tool will register all stores available to llama-stack.
+
+
+| Field | Type | Description |
+|-------|------|-------------|
+| inline | array | RAG IDs whose sources are injected as context before the LLM call. Use 'okp' to enable OKP inline RAG. Empty by default (no inline RAG). |
+| tool | array | RAG IDs made available to the LLM as a file_search tool. Use 'okp' to include the OKP vector store. When omitted, all registered BYOK vector stores are used (backward compatibility). |
+
+
 ## SQLiteDatabaseConfiguration
 
 
@@ -535,62 +575,6 @@ the service can handle requests concurrently.
 | tls_config |  | Transport Layer Security configuration for HTTPS support |
 | root_path | string | ASGI root path for serving behind a reverse proxy on a subpath |
 | cors |  | Cross-Origin Resource Sharing configuration for cross-domain requests |
-
-
-## RagConfiguration
-
-
-Top-level RAG strategy configuration. Controls two complementary retrieval modes:
-
-- **Inline RAG**: context is fetched from the listed sources and injected before the
-  LLM request.
-- **Tool RAG**: the LLM can call the `file_search` tool during generation to retrieve
-  context on demand from the listed vector stores. Supports both BYOK and OKP.
-
-Each strategy is configured as a list of RAG IDs referencing entries in `byok_rag`.
-The special ID `okp` activates the OKP provider (no `byok_rag` entry needed).
-
-**Backward compatibility**: omitting `tool` uses all registered BYOK vector stores
-(equivalent to the old `tool.byok.enabled = True`). Omitting `inline` means no
-context is injected before the LLM request.
-
-Example:
-
-```yaml
-rag:
-  inline:
-    - my-docs       # inject context from my-docs before the LLM request
-  tool:
-    - okp       # LLM can search OKP as a tool
-    - my-docs       # LLM can also search my-docs as a tool
-
-okp:
-  offline: true     # use parent_id for OKP URL construction
-```
-
-
-| Field | Type | Description |
-|-------|------|-------------|
-| inline | list[string] | RAG IDs whose content is injected before the LLM request. Use `okp` for OKP. Empty by default (no inline RAG). |
-| tool | list[string] or null | RAG IDs exposed as a `file_search` tool the LLM can invoke. Use `okp` to include OKP. When omitted, all registered BYOK vector stores are used (backward compatibility). |
-
-
-## OkpConfiguration
-
-OKP (Offline Knowledge Portal) provider settings. Only used when `okp` is listed in `rag.inline` or `rag.tool`.
-
-Example:
-
-```yaml
-okp:
-  offline: true                    # use parent_id for OKP URL construction
-  chunk_filter_query: "is_chunk:true"
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| offline | boolean | When `true` (default), use `parent_id` for OKP chunk source URLs. When `false`, use `reference_url`. |
-| chunk_filter_query | string | OKP filter query (`fq`) applied to every OKP search request. Defaults to `"is_chunk:true"`. Extend with `AND` for extra constraints. |
 
 
 ## SplunkConfiguration

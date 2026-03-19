@@ -2,7 +2,8 @@
 
 import asyncio
 from functools import wraps
-from typing import Any, Callable, cast
+from typing import Any, cast
+from collections.abc import Callable
 from logging import Logger
 
 from llama_stack_client import AsyncLlamaStackClient

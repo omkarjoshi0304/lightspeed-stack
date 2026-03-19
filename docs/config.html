@@ -376,6 +376,11 @@ using a different Azure service.</td>
     <h2 id="byokrag">ByokRag</h2>
     <p>BYOK (Bring Your Own Knowledge) RAG configuration.</p>
     <table>
+      <colgroup>
+        <col style="width: 26%"/>
+        <col style="width: 23%"/>
+        <col style="width: 50%"/>
+      </colgroup>
       <thead>
         <tr class="header">
           <th>Field</th>
@@ -413,6 +418,13 @@ using a different Azure service.</td>
           <td>db_path</td>
           <td>string</td>
           <td>Path to RAG database.</td>
+        </tr>
+        <tr class="odd">
+          <td>score_multiplier</td>
+          <td>number</td>
+          <td>Multiplier applied to relevance scores from this vector store. Used
+to weight results when querying multiple knowledge sources. Values &gt;
+1 boost this store&#x2019;s results; values &lt; 1 reduce them.</td>
         </tr>
       </tbody>
     </table>
@@ -603,9 +615,15 @@ reconfigure Llama Stack through its run.yaml configuration file</td>
 &#x2018;production&#x2019;). Used in telemetry events.</td>
         </tr>
         <tr class="even">
-          <td>solr</td>
+          <td>rag</td>
           <td/>
-          <td>Configuration for Solr vector search operations.</td>
+          <td>Configuration for all RAG strategies (inline and tool-based).</td>
+        </tr>
+        <tr class="odd">
+          <td>okp</td>
+          <td/>
+          <td>OKP provider settings. Only used when &#x2018;okp&#x2019; is listed in rag.inline
+or rag.tool.</td>
         </tr>
       </tbody>
     </table>
@@ -1089,6 +1107,41 @@ reserved for future use when Llama Stack adds timeout support.</td>
         </tr>
       </tbody>
     </table>
+    <h2 id="okpconfiguration">OkpConfiguration</h2>
+    <p>OKP (Offline Knowledge Portal) provider configuration.</p>
+    <p>Controls provider-specific behaviour for the OKP vector store. Only
+relevant when <code>"okp"</code> is listed in <code>rag.inline</code> or
+<code>rag.tool</code>.</p>
+    <table>
+      <colgroup>
+        <col style="width: 26%"/>
+        <col style="width: 23%"/>
+        <col style="width: 50%"/>
+      </colgroup>
+      <thead>
+        <tr class="header">
+          <th>Field</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="odd">
+          <td>offline</td>
+          <td>boolean</td>
+          <td>When True, use parent_id for OKP chunk source URLs. When False, use
+reference_url for chunk source URLs.</td>
+        </tr>
+        <tr class="even">
+          <td>chunk_filter_query</td>
+          <td>string</td>
+          <td>OKP filter query applied to every OKP search request. Defaults to
+&#x2018;is_chunk:true&#x2019; to restrict results to chunk documents. To add extra
+constraints, extend the expression using boolean syntax,
+e.g.&#xA0;&#x2018;is_chunk:true AND product:<em>openshift</em>&#x2019;.</td>
+        </tr>
+      </tbody>
+    </table>
     <h2 id="postgresqldatabaseconfiguration">PostgreSQLDatabaseConfiguration</h2>
     <p>PostgreSQL database configuration.</p>
     <p>PostgreSQL database is used by Lightspeed Core Stack service for
@@ -1337,6 +1390,48 @@ times with specified delay.</td>
         </tr>
       </tbody>
     </table>
+    <h2 id="ragconfiguration">RagConfiguration</h2>
+    <p>RAG strategy configuration.</p>
+    <p>Controls which RAG sources are used for inline and tool-based
+retrieval.</p>
+    <p>Each strategy lists RAG IDs to include. The special ID
+<code>"okp"</code> defined in constants, activates the OKP provider; all
+other IDs refer to entries in <code>byok_rag</code>.</p>
+    <p>Backward compatibility: - <code>inline</code> defaults to
+<code>[]</code> (no inline RAG). - <code>tool</code> defaults to
+<code>[]</code> (no tool RAG).</p>
+    <p>If no RAG strategy is defined (inline and tool are empty), the RAG
+tool will register all stores available to llama-stack.</p>
+    <table>
+      <colgroup>
+        <col style="width: 26%"/>
+        <col style="width: 23%"/>
+        <col style="width: 50%"/>
+      </colgroup>
+      <thead>
+        <tr class="header">
+          <th>Field</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="odd">
+          <td>inline</td>
+          <td>array</td>
+          <td>RAG IDs whose sources are injected as context before the LLM call.
+Use &#x2018;okp&#x2019; to enable OKP inline RAG. Empty by default (no inline
+RAG).</td>
+        </tr>
+        <tr class="even">
+          <td>tool</td>
+          <td>array</td>
+          <td>RAG IDs made available to the LLM as a file_search tool. Use &#x2018;okp&#x2019;
+to include the OKP vector store. When omitted, all registered BYOK
+vector stores are used (backward compatibility).</td>
+        </tr>
+      </tbody>
+    </table>
     <h2 id="sqlitedatabaseconfiguration">SQLiteDatabaseConfiguration</h2>
     <p>SQLite database configuration.</p>
     <table>
@@ -1426,39 +1521,6 @@ support.</td>
           <td/>
           <td>Cross-Origin Resource Sharing configuration for cross-domain
 requests</td>
-        </tr>
-      </tbody>
-    </table>
-    <h2 id="solrconfiguration">SolrConfiguration</h2>
-    <p>Solr configuration for vector search queries.</p>
-    <p>Controls whether to use offline or online mode when building document
-URLs from vector search results, and enables/disables Solr vector IO
-functionality.</p>
-    <table>
-      <colgroup>
-        <col style="width: 26%"/>
-        <col style="width: 23%"/>
-        <col style="width: 50%"/>
-      </colgroup>
-      <thead>
-        <tr class="header">
-          <th>Field</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr class="odd">
-          <td>enabled</td>
-          <td>boolean</td>
-          <td>When True, enables Solr vector IO functionality for vector search
-queries. When False, disables Solr vector search processing.</td>
-        </tr>
-        <tr class="even">
-          <td>offline</td>
-          <td>boolean</td>
-          <td>When True, use parent_id for chunk source URLs. When False, use
-reference_url for chunk source URLs.</td>
         </tr>
       </tbody>
     </table>

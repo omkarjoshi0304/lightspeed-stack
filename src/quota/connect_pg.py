@@ -1,6 +1,7 @@
 """PostgreSQL connection handler."""
 
 from typing import Any
+
 import psycopg2
 
 from log import get_logger

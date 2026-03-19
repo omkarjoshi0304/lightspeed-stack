@@ -40,7 +40,7 @@ def check_suid(suid: str) -> bool:
         return False
 
     # Strip 'conv_' prefix if present
-    hex_part = suid[5:] if suid.startswith("conv_") else suid
+    hex_part = suid.removeprefix("conv_")
 
     # Check for 48-char hex string (llama-stack conversation ID format)
     if len(hex_part) == 48:
@@ -103,3 +103,11 @@ def to_llama_stack_conversation_id(conversation_id: str) -> str:
     if not conversation_id.startswith("conv_"):
         return f"conv_{conversation_id}"
     return conversation_id
+
+
+def is_moderation_id(suid: str) -> bool:
+    """Check if given string is a moderation ID.
+
+    Returns True if the string starts with 'modr'.
+    """
+    return suid.startswith("modr")

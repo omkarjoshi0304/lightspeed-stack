@@ -3,8 +3,14 @@
 from typing import Any, Optional
 
 from fastapi import HTTPException
-from llama_stack_api import OpenAIResponseContentPartRefusal, OpenAIResponseMessage
-from llama_stack_client import APIConnectionError, APIStatusError, AsyncLlamaStackClient
+from llama_stack_api import OpenAIResponseMessage
+from llama_stack_client import (
+    APIConnectionError,
+    APIStatusError as LLSApiStatusError,
+    AsyncLlamaStackClient,
+)
+from llama_stack_client.types import ShieldListResponse
+from openai._exceptions import APIStatusError as OpenAIAPIStatusError
 
 import metrics
 from configuration import AppConfig
@@ -16,16 +22,15 @@ from models.responses import (
     UnprocessableEntityResponse,
     ServiceUnavailableResponse,
 )
-from utils.suid import get_suid
+from utils.query import handle_known_apistatus_errors
 from utils.types import (
     ShieldModerationBlocked,
     ShieldModerationPassed,
     ShieldModerationResult,
 )
+from constants import DEFAULT_VIOLATION_MESSAGE
 
 logger = get_logger(__name__)
-
-DEFAULT_VIOLATION_MESSAGE = "I cannot process this request due to policy restrictions."
 
 
 async def get_available_shields(client: AsyncLlamaStackClient) -> list[str]:
@@ -129,47 +134,11 @@ async def run_shield_moderation(
     Raises:
         HTTPException: If shield's provider_resource_id is not configured or model not found.
     """
-    all_shields = await client.shields.list()
-
-    # Filter shields based on shield_ids parameter
-    if shield_ids is not None:
-        if len(shield_ids) == 0:
-            response = UnprocessableEntityResponse(
-                response="Invalid shield configuration",
-                cause=(
-                    "shield_ids provided but no shields selected. "
-                    "Remove the parameter to use default shields."
-                ),
-            )
-            raise HTTPException(**response.model_dump())
-
-        shields_to_run = [s for s in all_shields if s.identifier in shield_ids]
-
-        # Log warning if requested shield not found
-        requested = set(shield_ids)
-        available = {s.identifier for s in shields_to_run}
-        missing = requested - available
-        if missing:
-            logger.warning("Requested shields not found: %s", missing)
-
-        # Reject if no requested shields were found (prevents accidental bypass)
-        if not shields_to_run:
-            response = UnprocessableEntityResponse(
-                response="Invalid shield configuration",
-                cause=f"Requested shield_ids not found: {sorted(missing)}",
-            )
-            raise HTTPException(**response.model_dump())
-    else:
-        shields_to_run = list(all_shields)
-
+    shields_to_run = await get_shields_for_request(client, shield_ids)
     available_models = {model.id for model in await client.models.list()}
-
     for shield in shields_to_run:
-        # Only validate provider_resource_id against models for llama-guard.
-        # Llama Stack does not verify that the llama-guard model is registered,
-        # so we check it here to fail fast with a clear error.
-        # Custom shield providers (e.g. lightspeed_question_validity) configure
-        # their model internally, so provider_resource_id is not a model ID.
+        # Lightspeed safety providers configure their model internally
+        # so provider_resource_id is not necessarily a valid model ID.
         if shield.provider_id == "llama-guard" and (
             not shield.provider_resource_id
             or shield.provider_resource_id not in available_models
@@ -184,18 +153,17 @@ async def run_shield_moderation(
             moderation_result = await client.moderations.create(
                 input=input_text, model=shield.provider_resource_id
             )
-        # Known Llama Stack bug: error is raised when violation is present
-        # in the shield LLM response but has wrong format that cannot be parsed.
-        except ValueError:
-            logger.warning(
-                "Shield violation detected, treating as blocked",
+        except APIConnectionError as e:
+            error_response = ServiceUnavailableResponse(
+                backend_name="Llama Stack",
+                cause=str(e),
             )
-            metrics.llm_calls_validation_errors_total.inc()
-            return ShieldModerationBlocked(
-                message=DEFAULT_VIOLATION_MESSAGE,
-                moderation_id=f"modr_{get_suid()}",
-                refusal_response=create_refusal_response(DEFAULT_VIOLATION_MESSAGE),
+            raise HTTPException(**error_response.model_dump()) from e
+        except (LLSApiStatusError, OpenAIAPIStatusError) as e:
+            error_response = handle_known_apistatus_errors(
+                e, shield.provider_resource_id or ""
             )
+            raise HTTPException(**error_response.model_dump()) from e
 
         if moderation_result.results and moderation_result.results[0].flagged:
             result = moderation_result.results[0]
@@ -247,7 +215,7 @@ async def append_turn_to_conversation(
             cause=str(e),
         )
         raise HTTPException(**error_response.model_dump()) from e
-    except APIStatusError as e:
+    except LLSApiStatusError as e:
         error_response = InternalServerErrorResponse.generic()
         raise HTTPException(**error_response.model_dump()) from e
 
@@ -255,18 +223,60 @@ async def append_turn_to_conversation(
 def create_refusal_response(refusal_message: str) -> OpenAIResponseMessage:
     """Create a refusal response message object.
 
-    Creates an OpenAIResponseMessage with assistant role containing a refusal
-    content part. This can be used for both conversation items and response output.
-
     Args:
         refusal_message: The refusal message text.
 
     Returns:
-        OpenAIResponseMessage with refusal content.
+        OpenAIResponseMessage with refusal message.
     """
-    refusal_content = OpenAIResponseContentPartRefusal(refusal=refusal_message)
     return OpenAIResponseMessage(
-        type="message",
         role="assistant",
-        content=[refusal_content],
+        content=refusal_message,
     )
+
+
+async def get_shields_for_request(
+    client: AsyncLlamaStackClient,
+    shield_ids: Optional[list[str]] = None,
+) -> ShieldListResponse:
+    """Resolve shields for the request: filtered by shield_ids or all configured.
+
+    Args:
+        client: Llama Stack client.
+        shield_ids: Optional list of shield IDs. If provided, only shields
+            with these identifiers are returned; if None, all configured
+            shields are returned.
+
+    Returns:
+        ShieldListResponse: List of Shield objects to run for this request.
+
+    Raises:
+        HTTPException: 404 if shield_ids is provided and any requested
+            shield is not configured in Llama Stack.
+    """
+    if shield_ids == []:
+        return []
+    try:
+        configured_shields: ShieldListResponse = await client.shields.list()
+        if shield_ids is None:
+            return configured_shields
+        requested = set(shield_ids)
+        configured_ids = {s.identifier for s in configured_shields}
+        missing = requested - configured_ids
+        if missing:
+            response = NotFoundResponse(
+                resource=f"Shield{'s' if len(missing) > 1 else ''}",
+                resource_id=", ".join(missing),
+            )
+            raise HTTPException(**response.model_dump())
+
+        return [s for s in configured_shields if s.identifier in requested]
+    except APIConnectionError as e:
+        error_response = ServiceUnavailableResponse(
+            backend_name="Llama Stack",
+            cause=str(e),
+        )
+        raise HTTPException(**error_response.model_dump()) from e
+    except LLSApiStatusError as e:
+        error_response = InternalServerErrorResponse.generic()
+        raise HTTPException(**error_response.model_dump()) from e

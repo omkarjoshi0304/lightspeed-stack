@@ -165,11 +165,26 @@ def check_response_body_schema(context: Context) -> None:
 
 @then("The body of the response contains {substring}")
 def check_response_body_contains(context: Context, substring: str) -> None:
-    """Check that response body contains a substring."""
+    """Check that response body contains a substring.
+
+    Supports {MODEL} and {PROVIDER} placeholders in the substring so
+    assertions work with any configured provider (e.g. unknown-provider
+    error message includes the actual model id).
+    """
+    assert context.response is not None, "Request needs to be performed first"
+    expected = replace_placeholders(context, substring)
+    assert (
+        expected in context.response.text
+    ), f"The response text '{context.response.text}' doesn't contain '{expected}'"
+
+
+@then("The body of the response does not contain {substring}")
+def check_response_body_does_not_contain(context: Context, substring: str) -> None:
+    """Check that response body does not contain a substring."""
     assert context.response is not None, "Request needs to be performed first"
     assert (
-        substring in context.response.text
-    ), f"The response text '{context.response.text}' doesn't contain '{substring}'"
+        substring not in context.response.text
+    ), f"The response text '{context.response.text}' contains '{substring}'"
 
 
 @then("The body of the response is the following")

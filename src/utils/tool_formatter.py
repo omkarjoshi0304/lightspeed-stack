@@ -36,7 +36,7 @@ def format_tool_response(tool_dict: dict[str, Any]) -> dict[str, Any]:
         description = clean_description
 
     # Extract only the required fields
-    formatted_tool = {
+    return {
         "identifier": tool_dict.get("identifier", ""),
         "description": description,
         "parameters": tool_dict.get("parameters", []),
@@ -45,8 +45,6 @@ def format_tool_response(tool_dict: dict[str, Any]) -> dict[str, Any]:
         "server_source": tool_dict.get("server_source", ""),
         "type": tool_dict.get("type", ""),
     }
-
-    return formatted_tool
 
 
 def extract_clean_description(description: str) -> str:

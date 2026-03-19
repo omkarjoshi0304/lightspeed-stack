@@ -2,15 +2,18 @@
 
 # pylint: disable=too-many-lines
 
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
-from pydantic import ValidationError
+from typing import Any
 
 import pytest
+from pydantic import ValidationError
+
+import constants
+from cache.in_memory_cache import InMemoryCache
+from cache.sqlite_cache import SQLiteCache
 from configuration import AppConfig, LogicError
 from models.config import CustomProfile, ModelContextProtocolServer
-from cache.sqlite_cache import SQLiteCache
-from cache.in_memory_cache import InMemoryCache
 
 
 # pylint: disable=broad-exception-caught,protected-access
@@ -445,49 +448,56 @@ def test_configuration_not_loaded() -> None:
     """Test that accessing configuration before loading raises an error."""
     cfg = AppConfig()
     with pytest.raises(LogicError, match="logic error: configuration is not loaded"):
-        cfg.configuration  # pylint: disable=pointless-statement
+        c = cfg.configuration
+        assert c is not None
 
 
 def test_service_configuration_not_loaded() -> None:
     """Test that accessing service_configuration before loading raises an error."""
     cfg = AppConfig()
     with pytest.raises(LogicError, match="logic error: configuration is not loaded"):
-        cfg.service_configuration  # pylint: disable=pointless-statement
+        c = cfg.service_configuration
+        assert c is not None
 
 
 def test_llama_stack_configuration_not_loaded() -> None:
     """Test that accessing llama_stack_configuration before loading raises an error."""
     cfg = AppConfig()
     with pytest.raises(LogicError, match="logic error: configuration is not loaded"):
-        cfg.llama_stack_configuration  # pylint: disable=pointless-statement
+        c = cfg.llama_stack_configuration
+        assert c is not None
 
 
 def test_user_data_collection_configuration_not_loaded() -> None:
     """Test that accessing user_data_collection_configuration before loading raises an error."""
     cfg = AppConfig()
     with pytest.raises(LogicError, match="logic error: configuration is not loaded"):
-        cfg.user_data_collection_configuration  # pylint: disable=pointless-statement
+        c = cfg.user_data_collection_configuration
+        assert c is not None
 
 
 def test_mcp_servers_not_loaded() -> None:
     """Test that accessing mcp_servers before loading raises an error."""
     cfg = AppConfig()
     with pytest.raises(LogicError, match="logic error: configuration is not loaded"):
-        cfg.mcp_servers  # pylint: disable=pointless-statement
+        c = cfg.mcp_servers
+        assert c is not None
 
 
 def test_authentication_configuration_not_loaded() -> None:
     """Test that accessing authentication_configuration before loading raises an error."""
     cfg = AppConfig()
     with pytest.raises(LogicError, match="logic error: configuration is not loaded"):
-        cfg.authentication_configuration  # pylint: disable=pointless-statement
+        c = cfg.authentication_configuration
+        assert c is not None
 
 
 def test_customization_not_loaded() -> None:
     """Test that accessing customization before loading raises an error."""
     cfg = AppConfig()
     with pytest.raises(LogicError, match="logic error: configuration is not loaded"):
-        cfg.customization  # pylint: disable=pointless-statement
+        c = cfg.customization
+        assert c is not None
 
 
 def test_load_configuration_with_customization_system_prompt_path(tmpdir: Path) -> None:
@@ -946,9 +956,59 @@ azure_entra_id:
         cfg.load_configuration(str(cfg_filename))
 
 
-def test_rag_id_mapping_empty_when_no_byok(minimal_config: AppConfig) -> None:
-    """Test that rag_id_mapping returns empty dict when no BYOK RAG configured."""
+def test_rag_id_mapping_excludes_solr_when_okp_not_configured(
+    minimal_config: AppConfig,
+) -> None:
+    """Test that rag_id_mapping does not include OKP/Solr when OKP is not in rag config."""
     assert minimal_config.rag_id_mapping == {}
+
+
+def test_rag_id_mapping_includes_solr_when_okp_in_inline() -> None:
+    """Test that rag_id_mapping includes OKP/Solr mapping when OKP is in rag.inline."""
+    cfg = AppConfig()
+    cfg.init_from_dict(
+        {
+            "name": "test",
+            "service": {"host": "localhost", "port": 8080},
+            "llama_stack": {
+                "api_key": "k",
+                "url": "http://test.com:1234",
+                "use_as_library_client": False,
+            },
+            "user_data_collection": {},
+            "authentication": {"module": "noop"},
+            "rag": {"inline": [constants.OKP_RAG_ID]},
+        }
+    )
+    assert constants.SOLR_DEFAULT_VECTOR_STORE_ID in cfg.rag_id_mapping
+    assert (
+        cfg.rag_id_mapping[constants.SOLR_DEFAULT_VECTOR_STORE_ID]
+        == constants.OKP_RAG_ID
+    )
+
+
+def test_rag_id_mapping_includes_solr_when_okp_in_tool() -> None:
+    """Test that rag_id_mapping includes OKP/Solr mapping when OKP is in rag.tool."""
+    cfg = AppConfig()
+    cfg.init_from_dict(
+        {
+            "name": "test",
+            "service": {"host": "localhost", "port": 8080},
+            "llama_stack": {
+                "api_key": "k",
+                "url": "http://test.com:1234",
+                "use_as_library_client": False,
+            },
+            "user_data_collection": {},
+            "authentication": {"module": "noop"},
+            "rag": {"tool": [constants.OKP_RAG_ID]},
+        }
+    )
+    assert constants.SOLR_DEFAULT_VECTOR_STORE_ID in cfg.rag_id_mapping
+    assert (
+        cfg.rag_id_mapping[constants.SOLR_DEFAULT_VECTOR_STORE_ID]
+        == constants.OKP_RAG_ID
+    )
 
 
 def test_rag_id_mapping_with_byok(tmp_path: Path) -> None:
@@ -977,6 +1037,41 @@ def test_rag_id_mapping_with_byok(tmp_path: Path) -> None:
         }
     )
     assert cfg.rag_id_mapping == {"vs-001": "my-kb"}
+
+
+def test_rag_id_mapping_with_byok_and_okp(tmp_path: Path) -> None:
+    """Test that rag_id_mapping includes both BYOK and OKP entries when OKP is configured."""
+    db_file = tmp_path / "test.db"
+    db_file.touch()
+    cfg = AppConfig()
+    cfg.init_from_dict(
+        {
+            "name": "test",
+            "service": {"host": "localhost", "port": 8080},
+            "llama_stack": {
+                "api_key": "k",
+                "url": "http://test.com:1234",
+                "use_as_library_client": False,
+            },
+            "user_data_collection": {},
+            "authentication": {"module": "noop"},
+            "rag": {"inline": [constants.OKP_RAG_ID]},
+            "byok_rag": [
+                {
+                    "rag_id": "my-kb",
+                    "vector_db_id": "vs-001",
+                    "db_path": str(db_file),
+                },
+            ],
+        }
+    )
+    assert "vs-001" in cfg.rag_id_mapping
+    assert cfg.rag_id_mapping["vs-001"] == "my-kb"
+    assert constants.SOLR_DEFAULT_VECTOR_STORE_ID in cfg.rag_id_mapping
+    assert (
+        cfg.rag_id_mapping[constants.SOLR_DEFAULT_VECTOR_STORE_ID]
+        == constants.OKP_RAG_ID
+    )
 
 
 def test_resolve_index_name_with_mapping(minimal_config: AppConfig) -> None:

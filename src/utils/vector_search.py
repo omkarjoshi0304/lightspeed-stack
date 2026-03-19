@@ -6,9 +6,12 @@ and processing RAG chunks that is shared between query_v2.py and streaming_query
 
 import asyncio
 import traceback
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from urllib.parse import urljoin
 
+from llama_stack_api.openai_responses import (
+    OpenAIResponseMessage as ResponseMessage,
+)
 from llama_stack_client import AsyncLlamaStackClient
 from pydantic import AnyUrl
 
@@ -17,7 +20,7 @@ from configuration import configuration
 from log import get_logger
 from models.responses import ReferencedDocument
 from utils.responses import resolve_vector_store_ids
-from utils.types import RAGChunk, RAGContext
+from utils.types import RAGChunk, RAGContext, ResponseInput
 
 logger = get_logger(__name__)
 
@@ -317,7 +320,7 @@ def _process_solr_chunks_for_documents(
 async def _fetch_byok_rag(
     client: AsyncLlamaStackClient,
     query: str,
-    vector_store_ids: Optional[list[str]] = None,
+    vector_store_ids: Optional[list[str]] = None,  # User-facing
 ) -> tuple[list[RAGChunk], list[ReferencedDocument]]:
     """Fetch chunks and documents from BYOK RAG sources.
 
@@ -339,22 +342,23 @@ async def _fetch_byok_rag(
 
     # Determine which BYOK vector stores to query for inline RAG.
     # Per-request override takes precedence; otherwise use config-based inline list.
-    if vector_store_ids is not None:
-        # Request-level override: filter out Solr store, use the rest
-        vector_store_ids_to_query = [
-            vs_id
-            for vs_id in vector_store_ids
-            if vs_id != constants.SOLR_DEFAULT_VECTOR_STORE_ID
-        ]
-    else:
-        inline_rag_ids = [
-            rid
-            for rid in configuration.configuration.rag.inline
-            if rid != constants.OKP_RAG_ID
-        ]
-        vector_store_ids_to_query = resolve_vector_store_ids(
-            inline_rag_ids, configuration.configuration.byok_rag
-        )
+    rag_ids_to_query = (
+        configuration.configuration.rag.inline
+        if vector_store_ids is None
+        else vector_store_ids
+    )
+
+    # Translate user-facing rag_ids to llama-stack ids
+    vector_store_ids_to_query: list[str] = resolve_vector_store_ids(
+        rag_ids_to_query, configuration.configuration.byok_rag
+    )
+
+    # Request-level override: filter out Solr store, use the rest
+    vector_store_ids_to_query = [
+        vs_id
+        for vs_id in vector_store_ids_to_query
+        if vs_id != constants.SOLR_DEFAULT_VECTOR_STORE_ID
+    ]
 
     # If inline byok stores are not defined, we disable the inline RAG for backward compatibility
     if not vector_store_ids_to_query:
@@ -493,6 +497,7 @@ async def _fetch_solr_rag(
 
 async def build_rag_context(
     client: AsyncLlamaStackClient,
+    moderation_decision: str,
     query: str,
     vector_store_ids: Optional[list[str]],
     solr: Optional[dict[str, Any]] = None,
@@ -503,12 +508,17 @@ async def build_rag_context(
 
     Args:
         client: The AsyncLlamaStackClient to use for the request
-        query_request: The user's query request
-        configuration: Application configuration
+        moderation_decision: The moderation decision
+        query: The user's query
+        vector_store_ids: The vector store IDs to query
+        solr: The Solr query parameters
 
     Returns:
         RAGContext containing formatted context text and referenced documents
     """
+    if moderation_decision == "blocked":
+        return RAGContext()
+
     # Fetch from all enabled RAG sources in parallel
     byok_chunks_task = _fetch_byok_rag(client, query, vector_store_ids)
     solr_chunks_task = _fetch_solr_rag(client, query, solr)
@@ -625,3 +635,39 @@ def _convert_solr_chunks_to_rag_format(
         )
 
     return rag_chunks
+
+
+def append_inline_rag_context_to_responses_input(
+    input_value: ResponseInput,
+    inline_rag_context_text: str,
+) -> ResponseInput:
+    """Append inline RAG context to Responses API input.
+
+    If input is str, appends the context text.
+    If input is a sequence of items, appends the context to the text of the first user message.
+    If there is no user message, returns the input unchanged.
+
+    Parameters:
+        input_value: The request input (string or list of ResponseItem).
+        inline_rag_context_text: RAG context string to inject.
+
+    Returns:
+        The same type as input_value, with context merged in.
+    """
+    if not inline_rag_context_text:
+        return input_value
+    if isinstance(input_value, str):
+        return input_value + "\n\n" + inline_rag_context_text
+    for item in input_value:
+        if item.type != "message" or item.role != "user":
+            continue
+        message = cast(ResponseMessage, item)
+        content = message.content
+        if isinstance(content, str):
+            message.content = content + "\n\n" + inline_rag_context_text
+            return input_value
+        for part in content:
+            if part.type == "input_text":
+                part.text = part.text + "\n\n" + inline_rag_context_text
+                return input_value
+    return input_value

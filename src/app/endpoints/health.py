@@ -75,7 +75,7 @@ async def get_providers_health_statuses() -> list[ProviderHealthStatus]:
         providers = await client.providers.list()
         logger.debug("Found %d providers", len(providers))
 
-        health_results = [
+        return [
             ProviderHealthStatus(
                 provider_id=provider.provider_id,
                 status=str(provider.health.get("status", "unknown")),
@@ -83,7 +83,6 @@ async def get_providers_health_statuses() -> list[ProviderHealthStatus]:
             )
             for provider in providers
         ]
-        return health_results
 
     except APIConnectionError as e:
         logger.error("Failed to check providers health: %s", e)
@@ -91,7 +90,7 @@ async def get_providers_health_statuses() -> list[ProviderHealthStatus]:
             ProviderHealthStatus(
                 provider_id="unknown",
                 status=HealthStatus.ERROR.value,
-                message=f"Failed to initialize health check: {str(e)}",
+                message=f"Failed to initialize health check: {e!s}",
             )
         ]
 

@@ -155,5 +155,4 @@ def generate_topic_summary() -> str:
         ],
     ]
 
-    summary = " ".join([random.choice(yap) for yap in yaps]) + "."
-    return summary
+    return " ".join([random.choice(yap) for yap in yaps]) + "."

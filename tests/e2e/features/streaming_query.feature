@@ -133,7 +133,7 @@ Feature: streaming_query endpoint API tests
     {"query": "Say hello", "model": "{MODEL}", "provider":"unknown"}
     """
     Then The status code of the response is 404
-      And The body of the response contains Model with ID gpt-4o-mini does not exist
+      And The body of the response contains Model with ID {MODEL} does not exist
       And The token metrics should not have changed
 
   Scenario: Check if LLM responds properly when XML and JSON attachments are sent

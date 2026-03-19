@@ -1,16 +1,16 @@
 """Authorization resolvers for role evaluation and access control."""
 
-from abc import ABC, abstractmethod
 import base64
 import json
+from abc import ABC, abstractmethod
 from typing import Any
 
 from jsonpath_ng import parse
 
-from authentication.interface import AuthTuple
-from models.config import JwtRoleRule, AccessRule, JsonPathOperator, Action
 import constants
+from authentication.interface import AuthTuple
 from log import get_logger
+from models.config import AccessRule, Action, JsonPathOperator, JwtRoleRule
 
 logger = get_logger(__name__)
 
@@ -148,8 +148,7 @@ class JwtRolesResolver(RolesResolver):  # pylint: disable=too-few-public-methods
             # No claims for guests
             return {}
 
-        jwt_claims = unsafe_get_claims(token)
-        return jwt_claims
+        return unsafe_get_claims(token)
 
     @staticmethod
     def _evaluate_operator(

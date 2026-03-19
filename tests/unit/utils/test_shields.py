@@ -1,5 +1,6 @@
 """Unit tests for utils/shields.py functions."""
 
+from llama_stack_client import APIConnectionError, APIStatusError
 import pytest
 from fastapi import HTTPException, status
 from pytest_mock import MockerFixture
@@ -9,6 +10,7 @@ from utils.shields import (
     append_turn_to_conversation,
     detect_shield_violations,
     get_available_shields,
+    get_shields_for_request,
     run_shield_moderation,
     validate_shield_ids_override,
 )
@@ -305,60 +307,25 @@ class TestRunShieldModeration:
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
     @pytest.mark.asyncio
-    async def test_returns_blocked_on_bad_request_error(
+    async def test_shield_ids_empty_list_runs_no_shields_returns_passed(
         self, mocker: MockerFixture
     ) -> None:
-        """Test that run_shield_moderation returns blocked when ValueError is raised."""
-        mock_metric = mocker.patch(
-            "utils.shields.metrics.llm_calls_validation_errors_total"
-        )
-        mock_client = mocker.Mock()
-
-        # Setup shield
-        shield = mocker.Mock()
-        shield.identifier = "test-shield"
-        shield.provider_resource_id = "moderation-model"
-        mock_client.shields.list = mocker.AsyncMock(return_value=[shield])
-
-        # Setup model
-        model = mocker.Mock()
-        model.id = "moderation-model"
-        mock_client.models.list = mocker.AsyncMock(return_value=[model])
-
-        # Setup moderation to raise ValueError (known Llama Stack bug)
-        mock_client.moderations.create = mocker.AsyncMock(
-            side_effect=ValueError("Bad request")
-        )
-
-        result = await run_shield_moderation(mock_client, "test input")
-
-        assert result.decision == "blocked"
-        assert result.message == DEFAULT_VIOLATION_MESSAGE
-        mock_metric.inc.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_shield_ids_empty_list_raises_422(
-        self, mocker: MockerFixture
-    ) -> None:
-        """Test that shield_ids=[] raises HTTPException 422 (prevents bypass)."""
+        """Test that shield_ids=[] runs no shields and returns passed."""
         mock_client = mocker.Mock()
         shield = mocker.Mock()
         shield.identifier = "shield-1"
         mock_client.shields.list = mocker.AsyncMock(return_value=[shield])
+        mock_client.models.list = mocker.AsyncMock(return_value=[])
 
-        with pytest.raises(HTTPException) as exc_info:
-            await run_shield_moderation(mock_client, "test input", shield_ids=[])
+        result = await run_shield_moderation(mock_client, "test input", shield_ids=[])
 
-        assert exc_info.value.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-        assert "shield_ids provided but no shields selected" in str(
-            exc_info.value.detail
-        )
+        assert result.decision == "passed"
 
     @pytest.mark.asyncio
-    async def test_shield_ids_raises_exception_when_no_shields_found(
+    async def test_shield_ids_raises_404_when_no_shields_found(
         self, mocker: MockerFixture
     ) -> None:
-        """Test shield_ids raises HTTPException when no requested shields exist."""
+        """Test shield_ids raises HTTPException 404 when requested shield not configured."""
         mock_client = mocker.Mock()
         shield = mocker.Mock()
         shield.identifier = "shield-1"
@@ -369,8 +336,8 @@ class TestRunShieldModeration:
                 mock_client, "test input", shield_ids=["typo-shield"]
             )
 
-        assert exc_info.value.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-        assert "Invalid shield configuration" in exc_info.value.detail["response"]  # type: ignore
+        assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+        assert "Shield" in exc_info.value.detail["response"]  # type: ignore
         assert "typo-shield" in exc_info.value.detail["cause"]  # type: ignore
 
     @pytest.mark.asyncio
@@ -518,3 +485,132 @@ class TestValidateShieldIdsOverride:
             validate_shield_ids_override(query_request, mock_config)
 
         assert exc_info.value.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+class TestGetShieldsForRequest:
+    """Tests for get_shields_for_request function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_all_shields_when_shield_ids_none(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Return all configured shields when shield_ids is None."""
+        mock_client = mocker.Mock()
+        shield1 = mocker.Mock()
+        shield1.identifier = "shield-1"
+        shield2 = mocker.Mock()
+        shield2.identifier = "shield-2"
+        mock_client.shields.list = mocker.AsyncMock(return_value=[shield1, shield2])
+
+        result = await get_shields_for_request(mock_client, shield_ids=None)
+
+        assert len(result) == 2
+        assert result[0].identifier == "shield-1"
+        assert result[1].identifier == "shield-2"
+        mock_client.shields.list.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_no_shields_configured(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that get_shields_for_request returns empty list when no shields configured."""
+        mock_client = mocker.Mock()
+        mock_client.shields.list = mocker.AsyncMock(return_value=[])
+
+        result = await get_shields_for_request(mock_client, shield_ids=None)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_filters_to_requested_shields_when_all_exist(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Test that get_shields_for_request returns only requested shields when all exist."""
+        mock_client = mocker.Mock()
+        shield1 = mocker.Mock()
+        shield1.identifier = "shield-1"
+        shield2 = mocker.Mock()
+        shield2.identifier = "shield-2"
+        shield3 = mocker.Mock()
+        shield3.identifier = "shield-3"
+        mock_client.shields.list = mocker.AsyncMock(
+            return_value=[shield1, shield2, shield3]
+        )
+
+        result = await get_shields_for_request(
+            mock_client, shield_ids=["shield-1", "shield-3"]
+        )
+
+        assert len(result) == 2
+        assert result[0].identifier == "shield-1"
+        assert result[1].identifier == "shield-3"
+
+    @pytest.mark.asyncio
+    async def test_raises_404_when_requested_shield_not_configured(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Raise 404 when a requested shield is not configured."""
+        mock_client = mocker.Mock()
+        shield = mocker.Mock()
+        shield.identifier = "shield-1"
+        mock_client.shields.list = mocker.AsyncMock(return_value=[shield])
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_shields_for_request(
+                mock_client, shield_ids=["shield-1", "missing-shield"]
+            )
+
+        assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+        assert "Shield" in exc_info.value.detail["response"]  # type: ignore
+        assert "missing-shield" in exc_info.value.detail["cause"]  # type: ignore
+
+    @pytest.mark.asyncio
+    async def test_raises_404_when_multiple_requested_shields_not_configured(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Raise 404 with all missing ids when multiple shields not configured."""
+        mock_client = mocker.Mock()
+        mock_client.shields.list = mocker.AsyncMock(return_value=[])
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_shields_for_request(
+                mock_client, shield_ids=["missing-1", "missing-2"]
+            )
+
+        assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+        assert "Shields" in exc_info.value.detail["response"]  # type: ignore
+        cause = exc_info.value.detail["cause"]  # type: ignore
+        assert "missing-1" in cause
+        assert "missing-2" in cause
+
+    @pytest.mark.asyncio
+    async def test_raises_503_on_connection_error(self, mocker: MockerFixture) -> None:
+        """Raise 503 on APIConnectionError."""
+        mock_client = mocker.Mock()
+        mock_client.shields.list = mocker.AsyncMock(
+            side_effect=APIConnectionError(
+                message="Connection failed", request=mocker.Mock()
+            )
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_shields_for_request(mock_client, shield_ids=None)
+
+        assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+    @pytest.mark.asyncio
+    async def test_raises_500_on_api_status_error(self, mocker: MockerFixture) -> None:
+        """Raise 500 on APIStatusError."""
+        mock_client = mocker.Mock()
+        mock_client.shields.list = mocker.AsyncMock(
+            side_effect=APIStatusError(
+                message="Server error",
+                response=mocker.Mock(request=None),
+                body=None,
+            )
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_shields_for_request(mock_client, shield_ids=None)
+
+        assert exc_info.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR

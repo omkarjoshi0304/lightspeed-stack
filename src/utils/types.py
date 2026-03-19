@@ -1,6 +1,6 @@
 """Common types for the project."""
 
-from typing import Annotated, Any, Literal, Optional, TypeAlias
+from typing import Annotated, Any, Literal, Optional
 
 from llama_stack_api import ImageContentItem, TextContentItem
 from llama_stack_api.openai_responses import (
@@ -17,14 +17,11 @@ from llama_stack_api.openai_responses import (
     OpenAIResponseOutputMessageWebSearchToolCall as WebSearchToolCall,
     OpenAIResponsePrompt as Prompt,
     OpenAIResponseText as Text,
+    OpenAIResponseReasoning as Reasoning,
 )
-from llama_stack_client.lib.agents.tool_parser import ToolParser
-from llama_stack_client.lib.agents.types import (
-    CompletionMessage as AgentCompletionMessage,
-    ToolCall as AgentToolCall,
-)
-from pydantic import AnyUrl, BaseModel, Field
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field
 
+from models.database.conversations import UserConversation
 from utils.token_counter import TokenCounter
 
 
@@ -68,53 +65,35 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-# See https://github.com/meta-llama/llama-stack-client-python/issues/206
-class GraniteToolParser(ToolParser):
-    """Workaround for 'tool_calls' with granite models."""
-
-    def get_tool_calls(
-        self, output_message: AgentCompletionMessage
-    ) -> list[AgentToolCall]:
-        """
-        Return the `tool_calls` list from a CompletionMessage, or an empty list if none are present.
-
-        Parameters:
-            output_message (Optional[AgentCompletionMessage]): Completion
-            message potentially containing `tool_calls`.
-
-        Returns:
-            list[AgentToolCall]: The list of tool call entries
-            extracted from `output_message`, or an empty list.
-        """
-        if output_message and output_message.tool_calls:
-            return output_message.tool_calls
-        return []
-
-    @staticmethod
-    def get_parser(model_id: str) -> Optional[ToolParser]:
-        """
-        Return a GraniteToolParser when the model identifier denotes a Granite model.
-
-        Returns None otherwise.
-
-        Parameters:
-            model_id (str): Model identifier string checked case-insensitively.
-            If it starts with "granite", a GraniteToolParser instance is
-            returned.
-
-        Returns:
-            Optional[ToolParser]: GraniteToolParser for Granite models, or None
-            if `model_id` is falsy or does not start with "granite".
-        """
-        if model_id and model_id.lower().startswith("granite"):
-            return GraniteToolParser()
-        return None
-
-
 class ShieldModerationPassed(BaseModel):
     """Shield moderation passed; no refusal."""
 
     decision: Literal["passed"] = "passed"
+
+
+class ResponsesConversationContext(BaseModel):
+    """Result of resolving conversation context for the responses endpoint.
+
+    Holds the conversation ID to use for the LLM, the optional user conversation
+    record, and the resolved generate_topic_summary flag. Caller assigns these
+    to the request in outer scope instead of mutating the request inside the
+    resolver.
+
+    Attributes:
+        conversation: Conversation ID in llama-stack format to use for the request.
+        user_conversation: Resolved user conversation record, or None for new ones.
+        generate_topic_summary: Resolved value for request.generate_topic_summary.
+    """
+
+    conversation: str = Field(description="Conversation ID in llama-stack format")
+    user_conversation: Optional[UserConversation] = Field(
+        default=None,
+        description="Resolved user conversation record, or None for new conversations",
+    )
+    generate_topic_summary: bool = Field(
+        description="Resolved value for request.generate_topic_summary",
+    )
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class ShieldModerationBlocked(BaseModel):
@@ -131,7 +110,7 @@ ShieldModerationResult = Annotated[
     Field(discriminator="decision"),
 ]
 
-IncludeParameter: TypeAlias = Literal[
+type IncludeParameter = Literal[
     "web_search_call.action.sources",
     "code_interpreter_call.outputs",
     "computer_call_output.output.image_url",
@@ -141,7 +120,7 @@ IncludeParameter: TypeAlias = Literal[
     "reasoning.encrypted_content",
 ]
 
-ResponseItem: TypeAlias = (
+type ResponseItem = (
     ResponseMessage
     | WebSearchToolCall
     | FileSearchToolCall
@@ -153,7 +132,7 @@ ResponseItem: TypeAlias = (
     | McpApprovalResponse
 )
 
-ResponseInput: TypeAlias = str | list[ResponseItem]
+type ResponseInput = str | list[ResponseItem]
 
 
 class ResponsesApiParams(BaseModel):
@@ -177,6 +156,10 @@ class ResponsesApiParams(BaseModel):
         default=None,
         description="Maximum number of inference iterations",
     )
+    max_output_tokens: Optional[int] = Field(
+        default=None,
+        description="Maximum number of tokens allowed in the response",
+    )
     max_tool_calls: Optional[int] = Field(
         default=None,
         description="Maximum tool calls allowed in a single response",
@@ -196,6 +179,10 @@ class ResponsesApiParams(BaseModel):
     prompt: Optional[Prompt] = Field(
         default=None,
         description="Prompt template with variables for dynamic substitution",
+    )
+    reasoning: Optional[Reasoning] = Field(
+        default=None,
+        description="Reasoning configuration for the response",
     )
     store: bool = Field(description="Whether to store the response")
     stream: bool = Field(description="Whether to stream the response")
@@ -230,6 +217,10 @@ class ResponsesApiParams(BaseModel):
         MCP servers.  See LCORE-1414 / GitHub issue #1269.
         """
         result = super().model_dump(*args, **kwargs)
+        # Only one context option is allowed, previous_response_id has priority
+        # Turn is added to conversation manually if previous_response_id is used
+        if self.previous_response_id:
+            result.pop("conversation", None)
         dumped_tools = result.get("tools")
         if not self.tools or not isinstance(dumped_tools, list):
             return result
@@ -327,12 +318,12 @@ class RAGContext(BaseModel):
 class TurnSummary(BaseModel):
     """Summary of a turn in llama stack."""
 
+    id: str = Field(default="", description="ID of the response")
     llm_response: str = ""
     tool_calls: list[ToolCallSummary] = Field(default_factory=list)
     tool_results: list[ToolResultSummary] = Field(default_factory=list)
     rag_chunks: list[RAGChunk] = Field(default_factory=list)
     referenced_documents: list[ReferencedDocument] = Field(default_factory=list)
-    inline_rag_documents: list[ReferencedDocument] = Field(default_factory=list)
     token_usage: TokenCounter = Field(default_factory=TokenCounter)
 
 
