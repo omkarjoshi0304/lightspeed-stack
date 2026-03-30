@@ -65,6 +65,12 @@ providers:
       persistence:
         namespace: vector_io::faiss
         backend: kv_rag
+  - provider_id: ocp-docs
+    provider_type: inline::faiss
+    config:
+      persistence:
+        namespace: vector_io::faiss
+        backend: kv_rag_ocp
   - config:
       persistence:
         namespace: vector_io::faiss
@@ -123,6 +129,9 @@ storage:
     kv_rag:
       type: kv_sqlite
       db_path: /Users/ojoshi/Documents/GitHub/rag-content/vector_db/faiss_store.db
+    kv_rag_ocp:
+      type: kv_sqlite
+      db_path: /Users/ojoshi/Desktop/rag-rhoso/ocp_latest_rw/faiss_store.db
   stores:
     metadata:
       namespace: registry
@@ -152,7 +161,7 @@ registered_resources:
     provider_model_id: nomic-ai/nomic-embed-text-v1.5
     metadata:
       embedding_dimension: 384
-  - model_id: llama3.2-3b
+  - model_id: ollama/llama3.2:3b
     model_type: llm
     provider_id: ollama
     provider_model_id: llama3.2:3b
@@ -171,6 +180,10 @@ registered_resources:
     embedding_dimension: 384
   - vector_store_id: vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360
     provider_id: os-docs
+    embedding_model: sentence-transformers/all-mpnet-base-v2
+    embedding_dimension: 768
+  - vector_store_id: vs_051a3031-630b-45a4-8547-624d7af1c416
+    provider_id: ocp-docs
     embedding_model: sentence-transformers/all-mpnet-base-v2
     embedding_dimension: 768
 

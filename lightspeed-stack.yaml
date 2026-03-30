@@ -22,6 +22,9 @@ user_data_collection:
   transcripts_enabled: true
   transcripts_storage: "/tmp/data/transcripts"
 
+inference:
+  default_model: llama3.2:3b
+  default_provider: ollama
 # Conversation cache for storing Q&A history
 conversation_cache:
   type: "sqlite"
@@ -43,15 +46,20 @@ mcp_servers:
 
 
 byok_rag:
-  - rag_id: "vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360"
+  - rag_id: "osp-docs"
     rag_type: "inline::faiss"
     embedding_model: "sentence-transformers/all-mpnet-base-v2"
     embedding_dimension: 768
     vector_db_id: "vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360"
     db_path: "/Users/ojoshi/Documents/GitHub/rag-content/vector_db/faiss_store.db"
+  - rag_id: "ocp-docs"
+    rag_type: "inline::faiss"
+    embedding_model: "sentence-transformers/all-mpnet-base-v2"
+    embedding_dimension: 768
+    vector_db_id: "vs_051a3031-630b-45a4-8547-624d7af1c416"
+    db_path: "/Users/ojoshi/Desktop/rag-rhoso/ocp_latest_rw/faiss_store.db"
 
 rag:
   inline:
-    - vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360
-  tool:
-    - vs_57fcd0f5-812b-4fd6-86d2-7e2ff013a360
+    - osp-docs
+    - ocp-docs
